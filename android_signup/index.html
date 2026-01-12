@@ -1,1 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Smart EV Guides, Android sign up</title>
+  <meta name="description" content="Sign up for Smart EV Guides Android testing access. Built for first responders." />
+
+  <meta property="og:title" content="Smart EV Guides, Android sign up" />
+  <meta property="og:description" content="Request Android testing access and share feedback. Use the email tied to your Google Play account." />
+  <meta property="og:type" content="website" />
+
+  <style>
+    :root{
+      --bg: #0b0f17;
+      --card: rgba(17,24,39,0.86);
+      --text: #e5e7eb;
+      --muted: #a3aab7;
+      --border: rgba(255,255,255,0.12);
+      --shadow: 0 22px 60px rgba(0,0,0,0.45);
+      --radius: 18px;
+      --accent: #60a5fa;
+    }
+
+    *{ box-sizing: border-box; }
+    html, body{ height: 100%; }
+
+    body{
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      color: var(--text);
+      background:
+        radial-gradient(1100px 650px at 20% 10%, rgba(96,165,250,0.18), transparent 60%),
+        radial-gradient(900px 520px at 85% 25%, rgba(59,130,246,0.14), transparent 60%),
+        var(--bg);
+      line-height: 1.45;
+    }
+
+    .wrap{
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 36px 18px 64px;
+    }
+
+    .top{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    .brand{
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: var(--text);
+    }
+
+    .icon{
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      box-shadow: 0 14px 34px rgba(0,0,0,0.35);
+      overflow: hidden;
+      flex: 0 0 auto;
+      background: rgba(255,255,255,0.04);
+    }
+
+    .icon img{
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .brandTitle{
+      display: grid;
+      gap: 2px;
+    }
+
+    .brandTitle strong{
+      font-size: 15px;
+      letter-spacing: 0.2px;
+    }
+
+    .brandTitle span{
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .tag{
+      font-size: 13px;
+      color: var(--muted);
+      padding: 9px 12px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.03);
+      white-space: nowrap;
+    }
+
+    .grid{
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 18px;
+      align-items: start;
+      margin-top: 14px;
+    }
+
+    @media (max-width: 900px){
+      .grid{ grid-template-columns: 1fr; }
+      .top{ flex-direction: column; align-items: flex-start; }
+    }
+
+    .card{
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .inner{ padding: 22px; }
+
+    h1{
+      margin: 0 0 10px;
+      font-size: 34px;
+      letter-spacing: -0.6px;
+      line-height: 1.15;
+    }
+
+    p{
+      margin: 0 0 12px;
+      color: var(--muted);
+      font-size: 16px;
+    }
+
+    .bullets{
+      display: grid;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .item{
+      display: flex;
+      gap: 12px;
+      padding: 12px 12px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: rgba(255,255,255,0.02);
+      align-items: flex-start;
+    }
+
+    .dot{
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: var(--accent);
+      margin-top: 7px;
+      box-shadow: 0 0 0 6px rgba(96,165,250,0.10);
+      flex: 0 0 auto;
+    }
+
+    .item b{
+      display: block;
+      font-size: 14px;
+      margin-bottom: 2px;
+      color: var(--text);
+    }
+
+    .item span{
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .actions{
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+
+    .btn{
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.03);
+      color: var(--text);
+      text-decoration: none;
+      font-size: 14px;
+    }
+
+    .btnPrimary{
+      border: 0;
+      background: linear-gradient(135deg, rgba(96,165,250,0.95), rgba(59,130,246,0.82));
+      color: #071018;
+      font-weight: 700;
+      box-shadow: 0 16px 36px rgba(59,130,246,0.22);
+    }
+
+    .btn:hover{ border-color: rgba(255,255,255,0.20); }
+    .btnPrimary:hover{ filter: brightness(1.03); }
+
+    .frameWrap{
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: rgba(0,0,0,0.18);
+    }
+
+    iframe{
+      width: 100%;
+      height: 1180px;
+      border: 0;
+      display: block;
+      background: transparent;
+    }
+
+    .small{
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 12px;
+    }
+
+    .small a{
+      color: var(--text);
+      text-decoration: none;
+      border-bottom: 1px solid rgba(255,255,255,0.25);
+    }
+
+    .footer{
+      margin-top: 14px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="top">
+      <a class="brand" href="/" aria-label="Smart EV Guides home">
+        <div class="icon">
+          <img
+            alt="Smart EV Guides app icon"
+            src="data:image/png;base64,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"
+          />
+        </div>
+        <div class="brandTitle">
+          <strong>Smart EV Guides</strong>
+          <span>Android sign up</span>
+        </div>
+      </a>
+      <div class="tag">Request testing access</div>
+    </div>
+
+    <div class="grid">
+      <section class="card">
+        <div class="inner">
+          <h1>Android testing sign up</h1>
+          <p>
+            Smart EV Guides is a free offline EV safety reference built for first responders.
+            Use this form to request access and share feedback.
+          </p>
+          <p>
+            Please use the email tied to your Android device, it is the one used for Google Play testing invites.
+          </p>
+
+          <div class="actions">
+            <a class="btn btnPrimary" href="https://docs.google.com/forms/d/e/1FAIpQLSdzFv6jRUZGk-U_UR8jAteCdj12aO-CQCZxDmVj6BGSRljIbA/viewform" target="_blank" rel="noopener">
+              Open the form in a new tab
+            </a>
+            <a class="btn" href="https://apps.apple.com/us/app/smart-ev-guides/id6755702439" target="_blank" rel="noopener">
+              iOS app
+            </a>
+          </div>
+
+          <div class="bullets">
+            <div class="item">
+              <div class="dot"></div>
+              <div>
+                <b>Offline by design</b>
+                <span>Built to work in dead zones and on scene environments.</span>
+              </div>
+            </div>
+            <div class="item">
+              <div class="dot"></div>
+              <div>
+                <b>Fast lookup</b>
+                <span>Find diagrams and safety info quickly, without scrolling long PDFs.</span>
+              </div>
+            </div>
+            <div class="item">
+              <div class="dot"></div>
+              <div>
+                <b>Feedback matters</b>
+                <span>Tester input helps expand coverage and improve usability.</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="footer">
+            Built by a firefighter in Colorado. This list is used for testing access and occasional updates.
+          </div>
+        </div>
+      </section>
+
+      <aside class="card">
+        <div class="inner">
+          <div class="frameWrap">
+            <iframe
+              title="Smart EV Guides Android sign up form"
+              src="https://docs.google.com/forms/d/e/1FAIpQLSdzFv6jRUZGk-U_UR8jAteCdj12aO-CQCZxDmVj6BGSRljIbA/viewform?embedded=true"
+              loading="lazy"
+              referrerpolicy="no-referrer-when-downgrade"
+            >
+              Loading…
+            </iframe>
+          </div>
+
+          <div class="small">
+            If the embed does not load, use this link:
+            <a href="https://docs.google.com/forms/d/e/1FAIpQLSdzFv6jRUZGk-U_UR8jAteCdj12aO-CQCZxDmVj6BGSRljIbA/viewform" target="_blank" rel="noopener">open the form</a>.
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</body>
+</html>
 
