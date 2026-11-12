@@ -597,6 +597,7 @@ footer .wrap{padding-top:56px;padding-bottom:40px}
 <script>
 (() => {
   const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const track = (ev, props) => { try { window.posthog && posthog.capture(ev, props); } catch (_) {} };   // no-op when ph.js isn't active (local previews)
 
   /* ---------- nav ---------- */
   const nav = document.getElementById('nav');
@@ -623,8 +624,13 @@ footer .wrap{padding-top:56px;padding-bottom:40px}
   /* ---------- gallery: native scroll + arrows + mouse drag ---------- */
   const gal = document.getElementById('gal'), gPrev = document.getElementById('galPrev'), gNext = document.getElementById('galNext');
   const gStep = () => ((gal.querySelector('img') || {}).offsetWidth || 300) + 20;
-  gPrev.onclick = () => gal.scrollBy({left: -gStep(), behavior: RM ? 'auto' : 'smooth'});
-  gNext.onclick = () => gal.scrollBy({left: gStep(), behavior: RM ? 'auto' : 'smooth'});
+  // screenshot_gallery_browse: once per page view, on the visitor's first real interaction
+  let galTracked = false, galTouch = false;
+  const galBrowse = method => { if (galTracked) return; galTracked = true; track('screenshot_gallery_browse', {method}); };
+  gal.addEventListener('touchstart', () => galTouch = true, {passive:true});
+  gal.addEventListener('scroll', () => { if (galTouch) galBrowse('swipe'); }, {passive:true});
+  gPrev.onclick = () => { galBrowse('arrow'); gal.scrollBy({left: -gStep(), behavior: RM ? 'auto' : 'smooth'}); };
+  gNext.onclick = () => { galBrowse('arrow'); gal.scrollBy({left: gStep(), behavior: RM ? 'auto' : 'smooth'}); };
   const navState = () => { gPrev.disabled = gal.scrollLeft < 4; gNext.disabled = gal.scrollLeft > gal.scrollWidth - gal.clientWidth - 4; };
   gal.addEventListener('scroll', navState, {passive:true}); addEventListener('resize', navState);
   gal.querySelectorAll('img').forEach(im => im.addEventListener('load', navState));
@@ -639,7 +645,7 @@ footer .wrap{padding-top:56px;padding-bottom:40px}
   });
   addEventListener('pointerup', () => {
     if (dragX === null) return; dragX = null;
-    if (moved){ const l = gal.scrollLeft; gal.classList.remove('drag'); gal.scrollLeft = l; setTimeout(() => moved = false, 0); }
+    if (moved){ galBrowse('drag'); const l = gal.scrollLeft; gal.classList.remove('drag'); gal.scrollLeft = l; setTimeout(() => moved = false, 0); }
   });
 
   /* ---------- reveal + count-up ---------- */
@@ -887,11 +893,17 @@ footer .wrap{padding-top:56px;padding-bottom:40px}
     n.frames.forEach((f, k) => setTimeout(() => { if (my === token) show(f, `${n.name}: ${n.topic}`); }, k === 0 ? 350 : 350 + k*1500));
   }
 
+  // orbit_node_select: once per node per page view (hover sweeps would otherwise flood events); autoplay isn't counted
+  const orbitSeen = new Set();
+  const pick = (n, method) => {
+    if (!orbitSeen.has(n)) { orbitSeen.add(n); track('orbit_node_select', {node: n.name, topic: n.topic, method, nodes_explored: orbitSeen.size}); }
+    select(n, true);
+  };
   nodes.forEach(n => {
-    n.el.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse'){ overNode = true; spdTarget = 0; select(n, true); } });
+    n.el.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse'){ overNode = true; spdTarget = 0; pick(n, 'hover'); } });
     n.el.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse'){ overNode = false; spdTarget = 0.15; } });
-    n.el.addEventListener('click', () => select(n, true));
-    n.el.addEventListener('focus', () => select(n, true));
+    n.el.addEventListener('click', () => pick(n, 'click'));
+    n.el.addEventListener('focus', () => pick(n, n.el.matches(':focus-visible') ? 'keyboard' : 'tap'));
   });
   stage.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse' && !overNode) spdTarget = 0.15; });
   stage.addEventListener('pointerleave', () => { overNode = false; spdTarget = 1; });

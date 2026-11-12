@@ -46,4 +46,24 @@
       props.domain = a.hostname; posthog.capture('outbound_click', props);
     }
   }, true);
+
+  /* section_viewed: once per section per page view, when its top reaches mid-screen.
+     Gives a drop-off funnel: top → how → features → departments → partners. */
+  function watchSections() {
+    if (!('IntersectionObserver' in window)) return;
+    var secs = document.querySelectorAll('section[id]');
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (!en.isIntersecting) return;
+        io.unobserve(en.target);
+        posthog.capture('section_viewed', {
+          section: en.target.id,
+          section_order: Array.prototype.indexOf.call(secs, en.target) + 1
+        });
+      });
+    }, { rootMargin: '0px 0px -50% 0px' });
+    secs.forEach(function (s) { io.observe(s); });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watchSections);
+  else watchSections();
 })();
