@@ -18,7 +18,8 @@
     https://www.smartevguides.com/get?c=<campaign name>
   The page rebuilds the store links with that campaign name:
     iPhone  -> Apple campaign link ct=<c>     (App Store Connect > App Analytics > Campaigns: downloads)
-    Android -> Play referrer utm_campaign=<c> (Play Console: store visits / install taps only)
+    Android -> Play referrer utm_campaign=<c>, utm_source from the prefix (yt_ = youtube, reddit_ = reddit, else meta)
+               (Play Console: store visits / install taps only)
   The visitor's own store button is shown first and big; the other store is a small link.
   ph.js records app_store_click with the store and the link (which carries the campaign).
 -->
@@ -91,8 +92,12 @@ footer a{color:#9E9992}
   if (!/^[a-z0-9_]{1,40}$/.test(c)) c = 'web_get';
 
   var ios = 'https://apps.apple.com/app/apple-store/id6755702439?pt=128321710&ct=' + c + '&mt=8';
+  // Source from the campaign prefix: yt_* = YouTube, reddit_* = Reddit, anything else = Meta.
+  var src = 'meta', med = 'paid_social';
+  if (/^yt_/.test(c)) { src = 'youtube'; med = 'paid_video'; }
+  else if (/^reddit_/.test(c)) { src = 'reddit'; }
   var android = 'https://play.google.com/store/apps/details?id=dg.smartev&referrer=' +
-    encodeURIComponent('utm_source=meta&utm_medium=paid_social&utm_campaign=' + c);
+    encodeURIComponent('utm_source=' + src + '&utm_medium=' + med + '&utm_campaign=' + c);
   if (c === 'web_get') android = 'https://play.google.com/store/apps/details?id=dg.smartev&referrer=' +
     encodeURIComponent('utm_source=website&utm_medium=get_page&utm_campaign=web_get');
 
@@ -122,6 +127,20 @@ footer a{color:#9E9992}
 <script src="ph.js"></script>
 <script>
   if (window.posthog && window.__seg_campaign) posthog.register({ campaign: window.__seg_campaign, landing: 'get' });
+</script>
+<!-- Google tag (Google Ads account), this page only; disclosed in privacy.html#website-analytics.
+     Store-button taps are sent as the event app_store_click {store, campaign}; mark it as a conversion in Google Ads later. -->
+<script async src="https://www.googletagmanager.com/gtm.js?id=GTM-545Q6FN3"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest && e.target.closest('a[href]');
+    if (!a) return;
+    var store = /apps\.apple\.com/.test(a.href) ? 'ios' : /play\.google\.com/.test(a.href) ? 'android' : '';
+    if (store) gtag('event', 'app_store_click', { store: store, campaign: window.__seg_campaign || '' });
+  }, true);
 </script>
 </body>
 </html>
