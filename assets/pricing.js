@@ -2,6 +2,8 @@
   "use strict";
   // Display only. Must match Stripe price price_1UdvD3LLmx5C29mwSsMc44ob (graduated, USD, yearly).
   // The Stripe payment link enforces min 2 / max 1000 devices; above that we quote.
+  // Checkout worker (EV_app/online/checkout-worker) opens Stripe with the chosen device count.
+  var CHECKOUT = "https://sevg-checkout.dylan-ginsber.workers.dev/checkout";
   var TIERS = [[10, 25], [25, 23], [50, 21], [100, 19], [Infinity, 17]], MIN = 2, MAX = 1000;
   var el = function (id) { return document.getElementById(id); };
   var input = el("devices"), slider = el("slider");
@@ -42,7 +44,7 @@
         return "<li><span>" + r.units + " × $" + r.rate + " (" + r.lo + "–" + r.hi + ")</span><span>" + fmt(r.units * r.rate) + "</span></li>";
       }).join("") : "";
       p.rows.forEach(function (r) { hits[r.i] = 1; });
-      el("qtyEcho").textContent = n;
+      el("checkout").href = CHECKOUT + "?qty=" + n;
     }
     [].forEach.call(document.querySelectorAll("#rates tr"), function (tr) {
       tr.classList.toggle("hit", over ? +tr.dataset.i === TIERS.length - 1 : !!hits[tr.dataset.i]);
