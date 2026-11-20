@@ -1,0 +1,31 @@
+Private checkpoint 57899bc59e197fa08ad78ceb46e11f3dfca9ee89
+Test environment: Python 3.12.14, Chromium with Playwright, SQLite, isolated mock processor.
+No real Stripe Checkout Session, Stripe-hosted payment or externally delivered Stripe webhook was exercised.
+
+test_browser_isolation (test_checkout.CheckoutTests.test_browser_isolation) ... ok
+test_client_inputs_do_not_price_orders (test_checkout.CheckoutTests.test_client_inputs_do_not_price_orders) ... ok
+test_concurrent_retry (test_checkout.CheckoutTests.test_concurrent_retry) ... ok
+test_failed_or_expired_not_activated (test_checkout.CheckoutTests.test_failed_or_expired_not_activated) ... ok
+test_http_checkout_and_signed_webhook (test_checkout.CheckoutTests.test_http_checkout_and_signed_webhook) ... ok
+test_marginal_and_full (test_checkout.CheckoutTests.test_marginal_and_full) ... ok
+test_paid_only_once_across_restart (test_checkout.CheckoutTests.test_paid_only_once_across_restart) ... ok
+test_session_binding (test_checkout.CheckoutTests.test_session_binding) ... ok
+test_signature_and_freshness (test_checkout.CheckoutTests.test_signature_and_freshness) ... ok
+test_stripe_adapter_contract_without_network (test_checkout.CheckoutTests.test_stripe_adapter_contract_without_network) ... ok
+test_test_bindings_required (test_checkout.CheckoutTests.test_test_bindings_required) ... ok
+test_uncertain_session_retry (test_checkout.CheckoutTests.test_uncertain_session_retry) ... ok
+test_wrong_created_session_is_rejected (test_checkout.CheckoutTests.test_wrong_created_session_is_rejected) ... ok
+
+----------------------------------------------------------------------
+Ran 13 tests in 0.575s
+
+OK
+
+PASS: browser form paths, errors/focus, edit, mailto contents, clipboard and manual fallback, print, mobile widths, calculator, mock checkout and return states, logo decode and private prefill. Six accessibility scans passed. No off-origin requests in captured review.
+
+Accessibility checks were axe-core WCAG 2/2.1 A and AA automated scans across six states.
+Mobile overflow checks ran at 320, 390, 768 and 1024 CSS pixels. The sample full-offer print was one US Letter page.
+Fixed USD annual amount verified at $2,500. Proposed marginal examples verified at $450 for 20, $630 for 30; above 500 requires a quote.
+A request with client-supplied amount was rejected. Twelve concurrent retries used one mock session. Duplicate signed paid events produced one event record and one pending-manual-activation state, with no entitlement grant.
+Mailto contents and both copy paths were inspected locally. No email was sent.
+Full-index patch was applied to an isolated index at base 6f241c684acb772eeb37cbcba212ce7d9ef80e82 and matched the checkpoint tree.

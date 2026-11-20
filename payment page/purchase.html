@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="form-action 'none'; connect-src 'none'; base-uri 'none'">
+  <title>Department license request · Smart EV Guides</title>
+  <link rel="icon" href="favicon.svg">
+  <link rel="stylesheet" href="assets/purchase/purchase.css">
+  <script defer src="assets/purchase/purchase-config.js"></script>
+  <script defer src="assets/purchase/purchase.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to request</a>
+  <header class="masthead"><div class="wrap bar">
+    <div class="brand"><img src="assets/5c214be88758.png" width="38" height="38" alt="">Smart EV Guides</div>
+    <span class="badge">Private preview</span>
+  </div></header>
+  <main id="main" class="wrap">
+    <header class="intro">
+      <p class="eyebrow">Department licensing</p>
+      <h1 id="title" tabindex="-1">Request a department license</h1>
+      <p id="lead">Request an invoice for an existing quote or describe the coverage your department needs.</p>
+    </header>
+    <noscript>Enable JavaScript to prepare and review your request locally.</noscript>
+    <div class="layout" id="app" hidden>
+      <aside class="paper" aria-labelledby="brief-title">
+        <p class="eyebrow" id="brief-label"></p>
+        <h2 id="brief-title"></h2>
+        <div id="brief-body"></div>
+        <p class="payment"><span aria-hidden="true">○</span> Live payments disabled</p>
+      </aside>
+      <div class="panel">
+        <form id="request" novalidate>
+          <fieldset><legend>License coverage</legend>
+            <div class="choices">
+              <label><input type="radio" name="scope" value="Full department" checked> Full department</label>
+              <label><input type="radio" name="scope" value="Smaller rollout"> Smaller rollout</label>
+            </div>
+          </fieldset>
+          <div class="fields section">
+            <label id="kind-row">Request type<select id="kind"><option>Invoice request</option><option>Quote request</option></select></label>
+            <label id="quantity-row" hidden>Desired license quantity <small>(optional)</small><input id="quantity" type="number" inputmode="numeric" min="1" step="1" placeholder="e.g. 20"></label>
+            <label>Quote or reference <small>(optional)</small><input id="reference" maxlength="100"></label>
+          </div>
+          <fieldset class="section"><legend>Department contact</legend>
+            <div class="fields">
+              <label>Department name<input id="department" autocomplete="organization" required maxlength="150"></label>
+              <label>Contact name<input id="contact" autocomplete="name" required maxlength="120"></label>
+              <label>Work email<input id="email" type="email" autocomplete="email" required maxlength="254"></label>
+              <label>Phone <small>(optional)</small><input id="phone" type="tel" autocomplete="tel" maxlength="50"></label>
+            </div>
+          </fieldset>
+          <label class="section">Device and coverage needs <small>(optional)</small>
+            <textarea rows="2" id="needs" maxlength="700" placeholder="Device types, approximate counts, or questions about coverage"></textarea>
+          </label>
+          <details class="section" id="billing"><summary>PO and billing preferences <small>(optional)</small></summary>
+            <div class="fields">
+              <label>PO number<input id="po" maxlength="100"></label>
+              <label>Billing country<select id="country"><option value="">Select if needed</option><option>Canada</option><option>United States</option><option>Other</option></select></label>
+              <label>Requested billing currency<select id="currency"><option value="">Select if needed</option><option>USD</option><option>CAD</option></select></label>
+            </div>
+          </details>
+          <p class="error" id="errors" role="alert"></p>
+          <button class="primary section" type="submit">Review request <span aria-hidden="true">→</span></button>
+        </form>
+        <section id="review" hidden aria-labelledby="review-heading">
+          <p class="print-only">Smart EV Guides · Private licensing preview</p>
+          <h2 id="review-heading">Request summary</h2>
+          <dl id="lines"></dl>
+          <p id="terms">Smart EV Guides will confirm the amount, scope, currency, applicable tax, payment method and activation arrangements in the agreed quote or invoice.</p>
+          <p id="obligation">This request creates no payment or contractual obligation.</p>
+          <p class="print-only" id="print-contact"></p>
+          <div class="actions"><button id="edit" type="button">Edit details</button><button id="print" type="button">Print / save PDF</button></div>
+          <div class="handoff">
+            <h3>Prepare your email</h3>
+            <p>Open a draft addressed to <strong id="recipient"></strong>. Review it in your email app and send it yourself if you wish to proceed. A team member will review it and reply.</p>
+            <div class="actions"><a class="primary" id="draft">Open email draft</a><button type="button" id="copy">Copy email text</button></div>
+            <details id="manual"><summary>Show email text for manual copying</summary><label for="message" class="sr">Email draft text</label><textarea id="message" readonly rows="8"></textarea></details>
+            <p id="status" role="status"></p>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

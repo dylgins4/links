@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+  <title>Test checkout · Smart EV Guides</title>
+  <link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/assets/purchase/purchase.css">
+  <script defer src="/owner/tool.js"></script>
+</head>
+<body>
+  <header class="masthead"><div class="wrap bar"><div class="brand"><img src="/assets/5c214be88758.png" width="38" height="38" alt="">Smart EV Guides</div><span class="badge">Private preview</span></div></header>
+  <main class="wrap">
+    <header class="intro"><p class="eyebrow">Owner review · Test checkout</p><h1>License calculator</h1><p id="lead">Compare the existing full-department offer with the proposed assigned-device schedule.</p></header>
+    <div class="layout">
+      <section class="panel">
+        <form id="calc">
+          <fieldset><legend>License option</legend><div class="choices">
+            <label><input type="radio" name="plan" value="full" checked>Full department</label>
+            <label><input type="radio" name="plan" value="smaller">Smaller rollout</label>
+          </div></fieldset>
+          <label class="section" id="units" hidden>Assigned devices · proposed unit<input id="count" type="number" inputmode="numeric" step="1" min="1" value="20"></label>
+          <p id="detail" class="section"></p>
+          <button id="checkout" class="primary section" disabled>Continue to test checkout</button>
+        </form>
+        <section id="returned" hidden><h2 id="return-title"></h2><p class="section" id="return-text"></p>
+          <button type="button" class="primary section" id="simulate" hidden>Simulate confirmed test payment</button>
+          <button type="button" id="refresh" hidden>Check payment status</button>
+          <button type="button" id="restart" hidden>Start a new test request</button>
+          <p class="section"><a href="/owner/">Back to calculator</a></p>
+        </section>
+        <p class="error" id="notice" role="status"></p>
+      </section>
+      <aside class="paper"><p class="eyebrow" id="mode">Private test environment</p><h2>Annual amount</h2>
+        <strong id="total" class="amount" aria-live="polite">—</strong><div id="breakdown"></div>
+        <p class="payment">Live payments disabled</p>
+        <p class="section"><a href="/purchase.html">Use the invoice request form</a></p>
+      </aside>
+    </div>
+  </main>
+</body>
+</html>

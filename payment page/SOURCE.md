@@ -1,0 +1,1113 @@
+# Complete source
+
+## .owner-review/REVIEW.html
+
+````html
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow"><title>Department licensing · Owner review</title>
+  <link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/assets/purchase/purchase.css">
+</head>
+<body>
+<header class="masthead"><div class="wrap bar"><div class="brand"><img src="/assets/5c214be88758.png" width="38" height="38" alt="">Smart EV Guides</div><span class="badge">Private preview</span></div></header>
+<main class="wrap">
+  <header class="intro"><p class="eyebrow">Department licensing</p><h1>Review the two offers</h1>
+    <p id="lead">The September 25 offer applies to its original department. The smaller option is a proposal for a separate quote.</p>
+  </header>
+  <div class="comparison">
+    <section class="panel"><p class="eyebrow">Existing full-department offer</p><h2>$2,500 USD per year</h2>
+      <p>All 152 members, every device. Individual plans are intended for personal phones. Department-owned tablets and MDTs require the department license.</p>
+      <h3>Refund</h3><p>A full refund if the product is not working for the crews within three months of licensing.</p>
+      <p><a href="/offer/purchase.html">Review the existing offer and request form</a></p>
+    </section>
+    <section class="paper"><p class="eyebrow">PROPOSED FOR APPROVAL</p><h2>$450 USD per year</h2>
+      <p>Example only: 20 selected department devices. The first 10 at $25 each plus the next 10 at $20 each total $450.</p>
+      <h3>Proposed unit</h3><p>One assigned device. A shared rig tablet counts once. Additional phones consume additional devices. Reassignment and enforcement remain unverified.</p>
+      <h3>Owner decision</h3><p>Core feature parity is proposed. A three-month refund would be a new term for this option. Confirm supplier lookup economics and fulfillment before setting a price or making coverage commitments.</p>
+    </section>
+  </div>
+  <div class="actions"><a class="primary" href="/owner/">Open private test calculator</a><a href="/purchase.html">General request form</a><a href="/REVIEW.md">Launch gates and local instructions</a></div>
+</main>
+</body>
+</html>
+````
+
+## .owner-review/REVIEW.md
+
+````markdown
+# Department license review
+
+Run with Python 3.10+ from the extracted bundle. Keep the state directory outside the site. The server binds only to the specified loopback address and serves an explicit file list.
+
+    python3 .owner-review/serve.py --mode mock --state-dir ../department-review-state
+
+Open http://127.0.0.1:8164/ for the comparison. Use /purchase.html for the general request, /offer/purchase.html for the existing offer, and /owner/ for the calculator and test checkout. Only the general form works by opening purchase.html directly. The server is required for the other paths. Stop it with Ctrl+C.
+
+The downloadable bundle omits identifying contact data. The owner-local preview can load the three editable prefill values from an existing private JSON file with --contact-file PATH. Its only keys are department, contact and email. The offer belongs to its original recipient regardless of contact edits. Printed and emailed smaller-rollout requests ask for separate pricing and coverage.
+
+## What runs today
+
+The calculator obtains prices from pricing.py on the server. The graduated schedule is DRAFT - under owner review, not approved. The whole-department offer uses a fixed annual USD amount. Both checkout paths model a one-time payment for a year. The owner must approve that collection mechanic. The test checkout does not calculate tax.
+
+Mock mode exchanges no Stripe traffic. Its confirmation control signs a local synthetic paid event. Stripe-test mode requires existing STRIPE_TEST_SECRET_KEY and STRIPE_TEST_WEBHOOK_SECRET bindings. Missing bindings stop startup. There is no fallback between modes. They use separate SQLite files. The live website is static and has no checkout server. The mobile app has store purchasing and entitlement logic. A compatible department-device assignment or fulfillment integration has not been verified.
+
+A return URL only reads state. A valid, recent signed test event must match a locally created session, reference, amount and currency before a transaction records pending manual activation. No app entitlement changes. A repeated checkout request reuses the same session. An uncertain creation can be retried with the original key during the recovery window. Older unresolved attempts require manual reconciliation.
+
+## Remaining gates
+
+1. Approve the license unit, schedule, eligible devices and any feature parity or separate refund for a smaller rollout. Whether the proposed $9 marginal band covers plate-lookup costs is unresolved. Verify supplier costs, limits, geographic availability and reassignment/enforcement. Preserve the original full-package offer. Confirm currency individually. Do not generalize a prior customer exception or a historical CAD estimate.
+2. Finance must confirm tax/exemption treatment, billing currency, accepted methods, any payment terms and documentation. Confirm whether a one-time annual card payment is suitable. Establish refund handling and manual invoice reconciliation.
+3. Use an authorized Stripe sandbox with its existing test secret and matching endpoint signing secret. Run the server with --mode stripe-test. Using an approved webhook delivery path, deliver signed Checkout completion, delayed success, failure and expiry events to /webhook. Test successful and abandoned test checkout, matching totals, redelivery and reconciliation. Real Stripe end-to-end behavior remains unverified until this is done.
+4. Select a private backend host, TLS, access controls and a durable backed-up ledger. Bind private offers to authorized recipients server-side. Review retention, privacy and monitoring. Isolate owner assets, contacts, pricing proposals and credentials from the public static distribution. Loopback checks and a browser correlation cookie are for local review only.
+5. Assign a fulfillment owner. Match cleared payment to the agreed quote, reconcile retries and exceptions, log activation once, verify the exact grant, then email setup instructions manually. Confirm who responds to quote and invoice drafts and collects any necessary billing address later.
+6. Dylan reviews the finished screens and sandbox evidence, approves the exact published files and explicitly authorizes a separate launch. Keep customer contact, live configuration changes, real charges and access changes outside this review. No automatic renewal is proposed here.
+
+## Reproduce the integration checks
+
+    python3 -m unittest discover -s .owner-review -p 'test_*.py' -v
+
+The patch applies to the original website base 6f241c684acb772eeb37cbcba212ce7d9ef80e82. Apply it to a clean local checkout. The ZIP includes the original site logo and favicon for independent preview.
+````
+
+## .owner-review/checkout.py
+
+````python
+"""Local-only test checkout. Money and fulfillment state are server-owned."""
+import hashlib
+import hmac
+import json
+import os
+import re
+import secrets
+import sqlite3
+import time
+import uuid
+from contextlib import closing
+from urllib import error, parse, request
+
+from pricing import price
+
+class Conflict(Exception):
+    pass
+
+class Unavailable(Exception):
+    pass
+
+class StripeTest:
+    mode = "stripe-test"
+
+    def __init__(self):
+        self.key = os.getenv("STRIPE_TEST_SECRET_KEY", "")
+        self.signing = os.getenv("STRIPE_TEST_WEBHOOK_SECRET", "").encode()
+        if not re.fullmatch(r"(sk|rk)_test_[A-Za-z0-9_]+", self.key) or not re.fullmatch(rb"whsec_[A-Za-z0-9_]+", self.signing):
+            raise SystemExit("Stripe test mode requires a sandbox secret key and its endpoint signing secret.")
+
+    def create(self, order, base):
+        fields = {
+            "mode": "payment", "payment_method_types[0]": "card",
+            "success_url": base + "/owner/?result=" + order["ref"],
+            "cancel_url": base + "/owner/?cancel=" + order["ref"],
+            "client_reference_id": order["ref"],
+            "line_items[0][quantity]": "1", "line_items[0][price_data][currency]": "usd",
+            "line_items[0][price_data][unit_amount]": str(order["cents"]),
+            "line_items[0][price_data][product_data][name]": "TEST annual department license — " + (
+                "full department" if order["plan"] == "full" else str(order["quantity"]) + " proposed assigned devices"),
+        }
+        req = request.Request("https://api.stripe.com/v1/checkout/sessions", parse.urlencode(fields).encode(),
+            headers={"Authorization": "Bearer " + self.key, "Idempotency-Key": order["ref"],
+                     "Stripe-Version": "2024-06-20", "Content-Type": "application/x-www-form-urlencoded"})
+        class NoRedirect(request.HTTPRedirectHandler):
+            def redirect_request(self, *args):
+                return None
+        try:
+            with request.build_opener(NoRedirect).open(req, timeout=12) as response:
+                session = json.load(response)
+        except (error.URLError, TimeoutError, ValueError) as exc:
+            raise Unavailable("Test checkout unavailable. Retry this request.") from exc
+        if parse.urlsplit(session.get("url") or "").netloc != "checkout.stripe.com" or not session["url"].startswith("https://"):
+            raise Unavailable("Unexpected checkout destination.")
+        return session
+
+class Mock:
+    mode = "mock"
+
+    def __init__(self):
+        self.signing = secrets.token_bytes(32)
+
+    def create(self, order, base):
+        return {"id": "cs_test_mock_" + order["ref"], "object": "checkout.session", "livemode": False,
+                "mode": "payment", "currency": "usd", "amount_total": order["cents"],
+                "client_reference_id": order["ref"], "url": "/owner/mock?ref=" + order["ref"]}
+
+def matches(session, order):
+    return (session.get("object") == "checkout.session" and session.get("livemode") is False
+            and session.get("mode") == "payment" and session.get("currency") == "usd"
+            and type(session.get("amount_total")) is int and session["amount_total"] == order["cents"]
+            and session.get("client_reference_id") == order["ref"])
+
+class Ledger:
+    def __init__(self, path, gateway, base):
+        self.path, self.gateway, self.base = path, gateway, base
+        with closing(self.connect()) as db, db:
+            db.executescript("""
+              CREATE TABLE IF NOT EXISTS orders (
+                ref TEXT PRIMARY KEY, owner TEXT NOT NULL, retry_key TEXT NOT NULL, plan TEXT NOT NULL,
+                quantity INTEGER, cents INTEGER NOT NULL, created INTEGER NOT NULL, session TEXT UNIQUE,
+                url TEXT, state TEXT NOT NULL DEFAULT 'awaiting_payment', UNIQUE(owner,retry_key));
+              CREATE TABLE IF NOT EXISTS events (id TEXT PRIMARY KEY, ref TEXT NOT NULL);
+            """)
+
+    def connect(self):
+        db = sqlite3.connect(self.path, timeout=8)
+        db.row_factory = sqlite3.Row
+        return db
+
+    def checkout(self, owner, payload):
+        spec = dict(payload)
+        key = spec.pop("retry", "")
+        if not isinstance(key, str) or not re.fullmatch(r"[a-f0-9]{32}", key):
+            raise ValueError("Missing request key.")
+        estimate = price(spec)
+        if estimate["quote"]:
+            raise ValueError("Request a quote for this quantity.")
+        selection = (spec["plan"], spec.get("quantity"), estimate["cents"])
+        with closing(self.connect()) as db, db:
+            db.execute("""INSERT INTO orders(ref,owner,retry_key,plan,quantity,cents,created)
+                       VALUES(?,?,?,?,?,?,?) ON CONFLICT(owner,retry_key) DO NOTHING""",
+                       (uuid.uuid4().hex, owner, key, *selection, int(time.time())))
+            order = db.execute("SELECT * FROM orders WHERE owner=? AND retry_key=?", (owner, key)).fetchone()
+            if tuple(order[k] for k in ("plan", "quantity", "cents")) != selection:
+                raise Conflict("This request has a different selection.")
+        if order["state"] != "awaiting_payment":
+            return {"url": "/owner/?result=" + order["ref"]}
+        if order["session"]:
+            return {"url": order["url"]}
+        if time.time() - order["created"] >= 23 * 3600:
+            raise Conflict("This incomplete request requires manual reconciliation.")
+        session = self.gateway.create(order, self.base)
+        if not matches(session, order) or not str(session.get("id", "")).startswith("cs_test_"):
+            raise Unavailable("Test session details could not be verified.")
+        with closing(self.connect()) as db, db:
+            updated = db.execute("UPDATE orders SET session=?,url=? WHERE ref=? AND (session IS NULL OR session=?)",
+                                 (session["id"], session["url"], order["ref"], session["id"]))
+            if updated.rowcount != 1:
+                raise Conflict("Session reconciliation required.")
+        return {"url": session["url"]}
+
+    def owned(self, owner, ref):
+        with closing(self.connect()) as db:
+            row = db.execute("SELECT * FROM orders WHERE ref=? AND owner=?", (ref, owner)).fetchone()
+        if row is None:
+            raise ValueError("Request unavailable.")
+        return row
+
+    def webhook(self, raw, signature):
+        parts = [s.strip().partition("=") for s in signature.split(",")]
+        stamps = [v for k, _, v in parts if k == "t"]
+        if len(stamps) != 1 or not re.fullmatch(r"[0-9]{1,12}", stamps[0]) or abs(time.time() - int(stamps[0])) > 300:
+            raise ValueError("Invalid signature timestamp.")
+        expected = hmac.digest(self.gateway.signing, stamps[0].encode() + b"." + raw, hashlib.sha256).hex()
+        if not any(k == "v1" and re.fullmatch(r"[0-9a-f]{64}", v) and hmac.compare_digest(v, expected) for k, _, v in parts):
+            raise ValueError("Invalid signature.")
+        event = json.loads(raw)
+        if not isinstance(event, dict) or event.get("livemode") is not False or not isinstance(event.get("id"), str) or not event["id"]:
+            raise ValueError("Invalid test event.")
+        states = {"checkout.session.completed": "pending_manual_activation",
+                  "checkout.session.async_payment_succeeded": "pending_manual_activation",
+                  "checkout.session.async_payment_failed": "payment_failed", "checkout.session.expired": "expired"}
+        state = states.get(event.get("type"))
+        if state is None:
+            return
+        session = event.get("data", {}).get("object", {})
+        if not isinstance(session, dict):
+            raise ValueError("Invalid session.")
+        if state == "pending_manual_activation" and session.get("payment_status") != "paid":
+            return
+        with closing(self.connect()) as db, db:
+            db.execute("BEGIN IMMEDIATE")
+            order = db.execute("SELECT * FROM orders WHERE ref=?", (session.get("client_reference_id"),)).fetchone()
+            if order is None or not matches(session, order):
+                raise ValueError("Payment does not match a local test request.")
+            if not order["session"]:
+                raise Conflict("Session registration pending. Retry delivery.")
+            if session.get("id") != order["session"]:
+                raise ValueError("Payment session mismatch.")
+            previous = db.execute("SELECT ref FROM events WHERE id=?", (event["id"],)).fetchone()
+            if previous:
+                if previous["ref"] != order["ref"]:
+                    raise ValueError("Event reference mismatch.")
+                return
+            db.execute("INSERT INTO events VALUES(?,?)", (event["id"], order["ref"]))
+            db.execute("UPDATE orders SET state=? WHERE ref=? AND state<>'pending_manual_activation'", (state, order["ref"]))
+
+    def simulate_paid(self, owner, ref):
+        if self.gateway.mode != "mock":
+            raise ValueError("Simulation unavailable.")
+        order = self.owned(owner, ref)
+        session = self.gateway.create(order, self.base)
+        session["payment_status"] = "paid"
+        raw = json.dumps({"id": "evt_mock_" + ref, "livemode": False, "type": "checkout.session.completed",
+                          "data": {"object": session}}).encode()
+        stamp = str(int(time.time()))
+        signature = hmac.digest(self.gateway.signing, stamp.encode() + b"." + raw, "sha256").hex()
+        self.webhook(raw, "t=" + stamp + ",v1=" + signature)
+````
+
+## .owner-review/owner.html
+
+````html
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+  <title>Test checkout · Smart EV Guides</title>
+  <link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/assets/purchase/purchase.css">
+  <script defer src="/owner/tool.js"></script>
+</head>
+<body>
+  <header class="masthead"><div class="wrap bar"><div class="brand"><img src="/assets/5c214be88758.png" width="38" height="38" alt="">Smart EV Guides</div><span class="badge">Private preview</span></div></header>
+  <main class="wrap">
+    <header class="intro"><p class="eyebrow">Owner review · Test checkout</p><h1>License calculator</h1><p id="lead">Compare the existing full-department offer with the proposed assigned-device schedule.</p></header>
+    <div class="layout">
+      <section class="panel">
+        <form id="calc">
+          <fieldset><legend>License option</legend><div class="choices">
+            <label><input type="radio" name="plan" value="full" checked>Full department</label>
+            <label><input type="radio" name="plan" value="smaller">Smaller rollout</label>
+          </div></fieldset>
+          <label class="section" id="units" hidden>Assigned devices · proposed unit<input id="count" type="number" inputmode="numeric" step="1" min="1" value="20"></label>
+          <p id="detail" class="section"></p>
+          <button id="checkout" class="primary section" disabled>Continue to test checkout</button>
+        </form>
+        <section id="returned" hidden><h2 id="return-title"></h2><p class="section" id="return-text"></p>
+          <button type="button" class="primary section" id="simulate" hidden>Simulate confirmed test payment</button>
+          <button type="button" id="refresh" hidden>Check payment status</button>
+          <button type="button" id="restart" hidden>Start a new test request</button>
+          <p class="section"><a href="/owner/">Back to calculator</a></p>
+        </section>
+        <p class="error" id="notice" role="status"></p>
+      </section>
+      <aside class="paper"><p class="eyebrow" id="mode">Private test environment</p><h2>Annual amount</h2>
+        <strong id="total" class="amount" aria-live="polite">—</strong><div id="breakdown"></div>
+        <p class="payment">Live payments disabled</p>
+        <p class="section"><a href="/purchase.html">Use the invoice request form</a></p>
+      </aside>
+    </div>
+  </main>
+</body>
+</html>
+````
+
+## .owner-review/pricing.py
+
+````python
+"""Private review only. DRAFT - under owner review, not approved."""
+INBOX = "dylan@smartevguides.com"
+FULL_CENTS = 250000
+BANDS = [(10, 2500), (25, 2000), (50, 1600), (100, 1200), (500, 900)]
+# 30 devices = 10x$25 + 15x$20 + 5x$16 = $630/yr.
+OFFER = {
+    "title": "September 25 department offer",
+    "amount": f"${FULL_CENTS / 100:,.0f} USD per year",
+    "scope": "The whole department, all 152 members and every device.",
+    "devices": "Individual plans are intended for personal phones. Department-owned tablets and mobile data terminals (MDTs) require the department license.",
+    "refund": "A full refund if Smart EV Guides is not working for your crews within three months of licensing.",
+}
+
+def price(spec):
+    if spec == {"plan": "full"}:
+        return {"cents": FULL_CENTS, "bands": [], "quote": False}
+    if set(spec) != {"plan", "quantity"} or spec["plan"] != "smaller":
+        raise ValueError("Choose a valid review option.")
+    count = spec["quantity"]
+    if type(count) is not int or count < 1:
+        raise ValueError("Enter a positive whole number of assigned devices.")
+    if count > BANDS[-1][0]:
+        return {"cents": None, "bands": [], "quote": True}
+    rows, first = [], 1
+    for last, rate in BANDS:
+        units = min(last, count) - first + 1
+        if units <= 0:
+            break
+        rows.append({"first": first, "last": first + units - 1, "units": units, "rate": rate})
+        first = last + 1
+    return {"cents": sum(row["units"] * row["rate"] for row in rows), "bands": rows, "quote": False}
+````
+
+## .owner-review/serve.py
+
+````python
+"""Run from an extracted private bundle. Only allow-listed files and loopback requests are served."""
+import argparse
+import json
+import mimetypes
+import os
+import re
+import secrets
+import sqlite3
+from http.cookies import SimpleCookie
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import urlsplit
+
+from checkout import Conflict, Ledger, Mock, StripeTest, Unavailable
+from pricing import INBOX, OFFER, price
+
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parent
+PUBLIC = {"purchase.html", "favicon.svg", "assets/5c214be88758.png",
+          *("assets/purchase/" + name for name in ("purchase.css", "purchase.js", "purchase-config.js"))}
+
+class Handler(BaseHTTPRequestHandler):
+    def log_message(self, *args):
+        pass
+
+    def send(self, status, body, mime, cookie=None):
+        self.send_response(status)
+        self.send_header("Content-Type", mime)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        if cookie:
+            # Hosted Checkout returns by a cross-site top-level GET. Every owner POST also checks Origin.
+            self.send_header("Set-Cookie", "review_browser=" + cookie + "; Path=/; HttpOnly; SameSite=Lax")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def reply(self, status, value):
+        self.send(status, json.dumps(value).encode(), "application/json")
+
+    def valid_host(self):
+        return self.headers.get("Host") == self.server.base.removeprefix("http://")
+
+    def owner(self):
+        cookies = SimpleCookie()
+        cookies.load(self.headers.get("Cookie", ""))
+        item = cookies.get("review_browser")
+        return item.value if item and re.fullmatch(r"[a-f0-9]{48}", item.value) else None
+
+    def do_GET(self):
+        if not self.valid_host():
+            return self.reply(403, {})
+        path = urlsplit(self.path).path
+        if path == "/offer/assets/purchase/purchase-config.js":
+            offer = dict(OFFER)
+            if self.server.contact:
+                offer["title"] = "September 25 offer to " + self.server.contact["department"]
+            config = {"invoiceEmail": INBOX, "offer": offer, "prefill": self.server.contact}
+            return self.send(200, ("const purchaseConfig = Object.freeze(" + json.dumps(config) + ");").encode(), "text/javascript")
+        if path in ("/owner/", "/owner/mock", "/owner/tool.js", "/REVIEW.md", "/", "/REVIEW.html"):
+            source = {"/owner/": "owner.html", "/owner/mock": "owner.html", "/owner/tool.js": "tool.js",
+                      "/REVIEW.md": "REVIEW.md", "/": "REVIEW.html", "/REVIEW.html": "REVIEW.html"}[path]
+            file = HERE / source
+        else:
+            name = path.removeprefix("/offer/") if path.startswith("/offer/") else path.removeprefix("/")
+            if name not in PUBLIC:
+                return self.reply(404, {})
+            file = ROOT / name
+        cookie = secrets.token_hex(24) if path in ("/owner/", "/owner/mock") and not self.owner() else None
+        return self.send(200, file.read_bytes(), mimetypes.guess_type(file.name)[0] or "text/plain", cookie)
+
+    def do_POST(self):
+        if not self.valid_host():
+            return self.reply(403, {})
+        try:
+            length = int(self.headers.get("Content-Length", "-1"))
+            if not 0 < length <= 131072:
+                return self.reply(413, {})
+            raw = self.rfile.read(length)
+            ledger = self.server.ledger
+            if self.path == "/webhook":
+                ledger.webhook(raw, self.headers.get("Stripe-Signature", ""))
+                return self.reply(200, {"received": True})
+            owner = self.owner()
+            if not owner or self.headers.get("Origin") != self.server.base:
+                return self.reply(403, {})
+            if self.headers.get_content_type() != "application/json":
+                return self.reply(415, {})
+            data = json.loads(raw)
+            if not isinstance(data, dict):
+                raise ValueError("Invalid request.")
+            if self.path == "/api/estimate":
+                result = {**price(data), "mode": ledger.gateway.mode}
+            elif self.path == "/api/checkout":
+                result = ledger.checkout(owner, data)
+            elif self.path in ("/api/status", "/api/mock-paid") and set(data) == {"ref"}:
+                if self.path == "/api/mock-paid":
+                    ledger.simulate_paid(owner, data["ref"])
+                row = ledger.owned(owner, data["ref"])
+                result = {"state": row["state"], "mode": ledger.gateway.mode, "cents": row["cents"],
+                          "plan": row["plan"], "quantity": row["quantity"]}
+            else:
+                return self.reply(404, {})
+            self.reply(200, result)
+        except (ValueError, KeyError, TypeError, AttributeError):
+            self.reply(400, {"error": "Invalid or unverifiable request."})
+        except Conflict:
+            self.reply(409, {"error": "Request conflict. Review the selection or retry later."})
+        except (Unavailable, sqlite3.Error, OSError):
+            self.reply(503, {"error": "Test service unavailable. Retry the same request."})
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--mode", required=True, choices=("mock", "stripe-test"))
+    parser.add_argument("--port", type=int, default=8164)
+    parser.add_argument("--state-dir", required=True, type=Path)
+    parser.add_argument("--contact-file", type=Path)
+    args = parser.parse_args()
+    gateway = Mock() if args.mode == "mock" else StripeTest()
+    contact = {}
+    if args.contact_file:
+        contact = json.loads(args.contact_file.read_text())
+        if set(contact) != {"department", "contact", "email"} or not all(isinstance(v,str) for v in contact.values()):
+            parser.error("Contact file must contain only department, contact and email strings.")
+    os.umask(0o077)
+    args.state_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    with ThreadingHTTPServer(("127.0.0.1", args.port), Handler) as server:
+        server.base = "http://127.0.0.1:" + str(server.server_address[1])
+        server.contact = contact
+        server.ledger = Ledger(args.state_dir / (args.mode + ".sqlite3"), gateway, server.base)
+        print("Private " + args.mode + " review: " + server.base, flush=True)
+        server.serve_forever()
+
+if __name__ == "__main__":
+    main()
+````
+
+## .owner-review/test_checkout.py
+
+````python
+import concurrent.futures
+import hashlib
+import hmac
+import io
+import json
+import os
+import tempfile
+import time
+import unittest
+from contextlib import closing
+from pathlib import Path
+from unittest.mock import patch
+from urllib.parse import parse_qs
+
+from checkout import Conflict, Ledger, Mock, StripeTest, Unavailable
+from pricing import price
+
+class CheckoutTests(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.gateway = Mock()
+        self.ledger = Ledger(Path(tmp.name) / "mock.sqlite3", self.gateway, "http://127.0.0.1:8164")
+        self.payload = {"plan": "smaller", "quantity": 20, "retry": "a" * 32}
+
+    def order(self):
+        url = self.ledger.checkout("one", self.payload)["url"]
+        return self.ledger.owned("one", url.split("=")[-1])
+
+    def event(self, order, kind="checkout.session.completed", identifier="evt_example", **changes):
+        session = self.gateway.create(order, "")
+        session.update({"payment_status": "paid", **changes})
+        return {"id": identifier, "livemode": False, "type": kind, "data": {"object": session}}
+
+    def deliver(self, event, offset=0, secret=None):
+        raw = json.dumps(event).encode()
+        stamp = str(int(time.time()) + offset)
+        sig = hmac.digest(secret or self.gateway.signing, stamp.encode() + b"." + raw, hashlib.sha256).hex()
+        self.ledger.webhook(raw, "t=" + stamp + ",v1=" + sig)
+
+    def test_marginal_and_full(self):
+        expected = {1:2500, 10:25000, 11:27000, 20:45000, 25:55000, 26:56600,
+                    30:63000, 50:95000, 51:96200, 100:155000, 101:155900, 500:515000}
+        for count, cents in expected.items():
+            self.assertEqual(price({"plan":"smaller","quantity":count})["cents"], cents)
+        self.assertTrue(price({"plan":"smaller","quantity":501})["quote"])
+        self.assertEqual(price({"plan":"full"})["cents"], 250000)
+
+    def test_client_inputs_do_not_price_orders(self):
+        for extra in ({"amount":1}, {"currency":"cad"}, {"quantity":501}, {"quantity":True},
+                      {"quantity":0}, {"quantity":2.5}, {"plan":"full"}, {"plan":"unknown"}):
+            with self.assertRaises(ValueError):
+                self.ledger.checkout("one", {**self.payload, **extra})
+
+    def test_concurrent_retry(self):
+        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+            urls = list(pool.map(lambda _: self.ledger.checkout("one", self.payload)["url"], range(12)))
+        self.assertEqual(len(set(urls)), 1)
+        with self.assertRaises(Conflict):
+            self.ledger.checkout("one", {**self.payload, "quantity":21})
+
+    def test_browser_isolation(self):
+        row = self.order()
+        with self.assertRaises(ValueError):
+            self.ledger.owned("two", row["ref"])
+        self.assertEqual(row["state"], "awaiting_payment")
+
+    def test_signature_and_freshness(self):
+        row = self.order()
+        for stamp, secret in [(0,b"invalid-mock-key"), (-400,None), (400,None)]:
+            with self.assertRaises(ValueError):
+                self.deliver(self.event(row), stamp, secret)
+        self.assertEqual(self.ledger.owned("one", row["ref"])["state"], "awaiting_payment")
+
+    def test_session_binding(self):
+        row = self.order()
+        for delta in [{"amount_total":45001}, {"currency":"cad"}, {"mode":"subscription"}, {"id":"wrong"},
+                      {"livemode":True}, {"client_reference_id":"unknown"}]:
+            with self.assertRaises(ValueError):
+                self.deliver(self.event(row, **delta))
+        event = self.event(row)
+        event["livemode"] = True
+        with self.assertRaises(ValueError):
+            self.deliver(event)
+        self.assertEqual(self.ledger.owned("one", row["ref"])["state"], "awaiting_payment")
+
+    def test_paid_only_once_across_restart(self):
+        row = self.order()
+        self.deliver(self.event(row, payment_status="unpaid"))
+        self.assertEqual(self.ledger.owned("one", row["ref"])["state"], "awaiting_payment")
+        self.deliver(self.event(row, "checkout.session.async_payment_succeeded"))
+        self.ledger = Ledger(self.ledger.path, self.gateway, self.ledger.base)
+        self.deliver(self.event(row, "checkout.session.async_payment_succeeded"))
+        with closing(self.ledger.connect()) as db:
+            self.assertEqual(db.execute("SELECT count(*) FROM events").fetchone()[0], 1)
+        self.deliver(self.event(row, "checkout.session.expired", "evt_late", payment_status="unpaid"))
+        self.assertEqual(self.ledger.owned("one", row["ref"])["state"], "pending_manual_activation")
+
+    def test_failed_or_expired_not_activated(self):
+        row = self.order()
+        for kind, status in [("checkout.session.async_payment_failed","payment_failed"),("checkout.session.expired","expired")]:
+            self.deliver(self.event(row, kind, kind, payment_status="unpaid"))
+            self.assertEqual(self.ledger.owned("one", row["ref"])["state"], status)
+
+    def test_uncertain_session_retry(self):
+        original = self.gateway.create
+        with patch.object(self.gateway, "create", side_effect=Unavailable("timeout")):
+            with self.assertRaises(Unavailable):
+                self.order()
+        with patch.object(self.gateway, "create", wraps=original):
+            row = self.order()
+        with closing(self.ledger.connect()) as db:
+            self.assertEqual(db.execute("SELECT count(*) FROM orders").fetchone()[0], 1)
+        self.assertEqual(row["cents"], 45000)
+
+    def test_test_bindings_required(self):
+        for key, signing in [("",""), ("sk_live_dummy","whsec_dummy"), ("sk_test_dummy","")]:
+            with patch.dict(os.environ, {"STRIPE_TEST_SECRET_KEY":key,"STRIPE_TEST_WEBHOOK_SECRET":signing}, clear=True):
+                with self.assertRaises(SystemExit):
+                    StripeTest()
+
+    def test_stripe_adapter_contract_without_network(self):
+        row = self.order()
+        session = self.gateway.create(row, "")
+        session["url"] = "https://checkout.stripe.com/c/pay/test-fixture"
+        with patch.dict(os.environ, {"STRIPE_TEST_SECRET_KEY":"sk_test_dummy","STRIPE_TEST_WEBHOOK_SECRET":"whsec_dummy"}):
+            adapter = StripeTest()
+        with patch("checkout.request.build_opener") as factory:
+            factory.return_value.open.return_value = io.BytesIO(json.dumps(session).encode())
+            self.assertEqual(adapter.create(row, self.ledger.base), session)
+            req = factory.return_value.open.call_args.args[0]
+            args = parse_qs(req.data.decode())
+            self.assertEqual(args["mode"], ["payment"])
+            self.assertEqual(args["line_items[0][price_data][unit_amount]"], ["45000"])
+            self.assertEqual(args["line_items[0][price_data][currency]"], ["usd"])
+            self.assertEqual(req.get_header("Idempotency-key"), row["ref"])
+            self.assertEqual(args["client_reference_id"], [row["ref"]])
+            self.assertNotIn("subscription_data", args)
+
+    def test_wrong_created_session_is_rejected(self):
+        original = self.gateway.create
+        def unexpected(order, base):
+            return {**original(order, base), "amount_total":1}
+        with patch.object(self.gateway, "create", side_effect=unexpected), self.assertRaises(Unavailable):
+            self.order()
+        with closing(self.ledger.connect()) as db:
+            self.assertIsNone(db.execute("SELECT session FROM orders").fetchone()[0])
+
+    def test_http_checkout_and_signed_webhook(self):
+        from http.server import ThreadingHTTPServer
+        from threading import Thread
+        from urllib import request, error
+        from serve import Handler
+        with ThreadingHTTPServer(("127.0.0.1", 0), Handler) as server:
+            base = "http://127.0.0.1:" + str(server.server_port)
+            server.base, server.ledger, server.contact = base, self.ledger, {}
+            Thread(target=server.serve_forever, daemon=True).start()
+            try:
+                with request.urlopen(base + "/owner/") as response:
+                    cookie = response.headers["Set-Cookie"].split(";")[0]
+                headers = {"Cookie":cookie, "Origin":base, "Content-Type":"application/json"}
+                def post(path, raw, hdr):
+                    req = request.Request(base + path, data=raw, headers=hdr)
+                    with request.urlopen(req) as response:
+                        return json.load(response)
+                payload = json.dumps(self.payload).encode()
+                with self.assertRaises(error.HTTPError) as rejected:
+                    post("/api/checkout", payload, {**headers, "Origin":"https://example.invalid"})
+                self.assertEqual(rejected.exception.code, 403)
+                with self.assertRaises(error.HTTPError) as invalid:
+                    post("/api/checkout", json.dumps({**self.payload,"amount":1}).encode(), headers)
+                self.assertEqual(invalid.exception.code, 400)
+                ref = post("/api/checkout", payload, headers)["url"].split("=")[-1]
+                row = self.ledger.owned(cookie.split("=")[1], ref)
+                raw = json.dumps(self.event(row)).encode()
+                stamp = str(int(time.time()))
+                sig = hmac.digest(self.gateway.signing, stamp.encode() + b"." + raw, "sha256").hex()
+                hook = {"Stripe-Signature":"t=" + stamp + ",v1=" + sig}
+                with self.assertRaises(error.HTTPError) as bad:
+                    post("/webhook", raw + b" ", hook)
+                self.assertEqual(bad.exception.code, 400)
+                for _ in range(2):
+                    self.assertTrue(post("/webhook", raw, hook)["received"])
+                status = post("/api/status", json.dumps({"ref":ref}).encode(), headers)
+                self.assertEqual((status["state"],status["cents"]), ("pending_manual_activation",45000))
+            finally:
+                server.shutdown()
+````
+
+## .owner-review/tool.js
+
+````javascript
+"use strict";
+const el = id => document.getElementById(id);
+const form = el("calc");
+const money = cents => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100) + " USD";
+const query = new URLSearchParams(location.search);
+const mockScreen = location.pathname === "/owner/mock";
+const ref = query.get("ref") || query.get("result") || query.get("cancel");
+let revision = 0;
+let submitting = false;
+let retryKey;
+let lastSpec;
+async function api(path, payload) {
+  const response = await fetch("/api/" + path, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(payload) });
+  const data = await response.json();
+  if (!response.ok) throw Error(data.error || "Test service unavailable.");
+  return data;
+}
+function spec() {
+  return form.elements.plan.value === "full" ? {plan:"full"} : {plan:"smaller", quantity:el("count").valueAsNumber};
+}
+function modeLabel(mode) {
+  el("mode").textContent = mode === "mock" ? "Isolated mock · no Stripe connection" : "Stripe sandbox · test only";
+}
+async function estimate() {
+  const version = ++revision;
+  const body = spec(), small = body.plan === "smaller";
+  el("units").hidden = !small;
+  el("count").disabled = !small;
+  el("checkout").disabled = true;
+  el("breakdown").replaceChildren();
+  el("total").textContent = "—";
+  el("notice").textContent = "";
+  el("detail").textContent = small
+    ? "PROPOSED FOR APPROVAL. Each shared rig tablet counts once. Extra phones count as additional assigned devices."
+    : "September 25 full-department offer. The fixed annual amount covers all 152 members and every device.";
+  if (small && (!Number.isSafeInteger(body.quantity) || body.quantity < 1)) {
+    el("notice").textContent = "Enter a positive whole number of assigned devices.";
+    return;
+  }
+  try {
+    const result = await api("estimate", body);
+    if (version !== revision) return;
+    modeLabel(result.mode);
+    el("total").textContent = result.quote ? "Request a quote" : money(result.cents);
+    for (const b of result.bands) {
+      const line = document.createElement("p");
+      line.textContent = "Devices " + b.first + "–" + b.last + " · " + b.units + " × " + money(b.rate);
+      el("breakdown").append(line);
+    }
+    el("checkout").disabled = result.quote || submitting;
+  } catch (e) { if (version === revision) el("notice").textContent = e.message; }
+}
+form.oninput = estimate;
+form.onsubmit = async event => {
+  event.preventDefault();
+  if (submitting || el("checkout").disabled) return;
+  submitting = true;
+  el("checkout").disabled = true;
+  form.querySelector("fieldset").disabled = true;
+  const body = spec();
+  el("count").readOnly = true;
+  try {
+    const selection = JSON.stringify(body);
+    if (selection !== lastSpec) {
+      const slot = "test-checkout-" + selection;
+      retryKey = sessionStorage.getItem(slot) || crypto.randomUUID().replaceAll("-", "");
+      sessionStorage.setItem(slot, retryKey);
+      lastSpec = selection;
+    }
+    const result = await api("checkout", {...body, retry:retryKey});
+    location.assign(result.url);
+  } catch (e) {
+    submitting = false;
+    form.querySelector("fieldset").disabled = false;
+    el("count").readOnly = false;
+    await estimate();
+    el("notice").textContent = e.message;
+  }
+};
+async function status(confirm = false) {
+  el("simulate").disabled = true;
+  try {
+    const data = await api(confirm ? "mock-paid" : "status", {ref});
+    modeLabel(data.mode);
+    el("total").textContent = money(data.cents);
+    const paid = data.state === "pending_manual_activation";
+    el("return-title").textContent = paid ? "Pending manual activation" : mockScreen ? "Mock payment review" : "Payment confirmation pending";
+    el("return-text").textContent = paid
+      ? "A verified test event was recorded. This test grants no access. Staff would reconcile payment and arrange activation."
+      : mockScreen ? "This isolated simulation records a test event only when you choose to continue."
+        : query.has("cancel") ? "You returned from checkout. No confirmed payment is recorded." : "The server is waiting for a verified paid event. A browser return does not confirm payment.";
+    const ended = ["expired", "payment_failed"].includes(data.state);
+    if (ended) {
+      el("return-title").textContent = data.state === "expired" ? "Test session expired" : "Test payment failed";
+      el("return-text").textContent = "No confirmed payment was recorded for this session.";
+    }
+    el("simulate").hidden = paid || ended || !mockScreen || data.mode !== "mock";
+    el("refresh").hidden = paid || ended || mockScreen;
+    el("restart").hidden = !ended && !paid;
+    el("restart").onclick = () => {
+      const previous = data.plan === "full" ? {plan:"full"} : {plan:"smaller", quantity:data.quantity};
+      sessionStorage.removeItem("test-checkout-" + JSON.stringify(previous));
+      location.assign("/owner/");
+    };
+    el("notice").textContent = "";
+  } catch (e) { el("notice").textContent = e.message; }
+  el("simulate").disabled = false;
+}
+if (ref || mockScreen) {
+  form.hidden = true;
+  el("returned").hidden = false;
+  el("simulate").onclick = () => status(true);
+  el("refresh").onclick = () => status();
+  status();
+} else estimate();
+````
+
+## assets/purchase/purchase-config.js
+
+````javascript
+// This general form requests a quote or invoice. Pricing is confirmed by staff.
+const purchaseConfig = Object.freeze({
+  invoiceEmail: "dylan@smartevguides.com",
+});
+````
+
+## assets/purchase/purchase.css
+
+````css
+:root {
+  color-scheme:dark; --ink:#080909; --card:#111213; --cream:#f7f2e8; --muted:#b9b4aa;
+  --amber:#f2b53c; --line:#3e3d39; --sans:Geist,system-ui,-apple-system,sans-serif;
+}
+* { box-sizing:border-box }
+[hidden] { display:none!important }
+body { margin:0; background:var(--ink); color:var(--cream); font:1rem/1.5 var(--sans) }
+.wrap { width:min(1120px,calc(100% - 48px)); margin:auto }
+.masthead { border-bottom:1px solid var(--line) }
+.bar,.brand,.actions { display:flex; align-items:center; gap:12px }
+.bar { justify-content:space-between; min-height:70px }
+.brand { font-size:1.1rem; font-weight:650; letter-spacing:-.03em }
+.brand img { object-fit:contain; background:#050505; border-radius:9px }
+.badge,.eyebrow { font:600 .73rem/1.5 "Geist Mono",ui-monospace,monospace; text-transform:uppercase; letter-spacing:.12em }
+.badge { color:#f6cf80; padding:5px 11px; border:1px solid #6b5532; border-radius:30px }
+.intro { padding:clamp(30px,4vw,54px) 0 28px }
+h1,h2,h3,p,dl { margin:0 }
+h1,h2,h3,legend { line-height:1.18; letter-spacing:-.035em }
+h1 { font-size:clamp(2.3rem,4.7vw,3.65rem); margin:8px 0 12px }
+h2,legend { font-size:1.4rem; font-weight:650 }
+h3 { font-size:1.05rem }
+.eyebrow { color:var(--amber) }
+#lead,.handoff p,#terms,#obligation,small { color:var(--muted) }
+.layout { display:grid; grid-template-columns:minmax(0,1.65fr) minmax(0,1fr); gap:22px; align-items:start; margin-bottom:48px }
+.panel,.paper { min-width:0; padding:clamp(20px,2.5vw,32px); border-radius:16px }
+.panel { grid-area:1/1; background:var(--card); border:1px solid #302f2c }
+.paper { grid-area:1/2; background:var(--cream); color:#28251f; border-top:5px solid var(--amber); border-radius:4px 4px 14px 14px }
+.paper .eyebrow { color:#705521 }
+.paper h2 { margin:10px 0 18px; font-size:1.65rem }
+.paper h3 { margin:18px 0 4px }
+.paper p { overflow-wrap:anywhere }
+.paper .payment { margin-top:20px; border-top:1px solid #cec5b5; padding-top:14px; color:#554d40; font-size:.88rem; font-weight:600 }
+.amount { font-size:1.75rem; font-weight:650; letter-spacing:-.04em }
+fieldset { margin:0; padding:0; min-width:0; border:0 }
+legend { padding:0; margin:0 0 14px }
+.choices,.fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px }
+.section,.handoff { display:block; margin-top:22px }
+.fields.section { display:grid }
+.print-only { display:none }
+.section legend,.handoff { border-top:1px solid var(--line); width:100%; padding-top:18px }
+label,summary { font-size:.94rem; font-weight:560 }
+small { font-size:.86rem; font-weight:400 }
+.choices label { display:flex; gap:9px; align-items:center; padding:12px 14px; border:1px solid #686357; border-radius:10px; cursor:pointer }
+.choices label:has(:checked) { background:#2a241a; border-color:var(--amber) }
+input,textarea,select,button { font:inherit }
+input:not([type=radio]),textarea,select { display:block; width:100%; margin-top:5px; border:1px solid #69645d; padding:9px 10px; min-height:44px; border-radius:7px; color:var(--cream); background:#0b0c0d }
+textarea { resize:vertical }
+input[type=radio] { margin:0; accent-color:var(--amber) }
+[aria-invalid=true] { border-color:#ffb6a5!important }
+details { border-top:1px solid var(--line); padding-top:12px }
+summary { cursor:pointer; min-height:36px; padding:5px 0 }
+details .fields { margin-top:10px }
+button,.primary { display:inline-flex; align-items:center; justify-content:center; gap:12px; min-height:44px; padding:10px 16px; border:1px solid #69645d; border-radius:8px; background:transparent; color:var(--cream); font-weight:600; cursor:pointer; text-decoration:none }
+.primary { background:var(--amber); color:var(--ink); border-color:var(--amber) }
+button:hover,.primary:hover { border-color:var(--cream) }
+:focus-visible { outline:3px solid var(--amber); outline-offset:3px }
+.actions { flex-wrap:wrap; margin-top:16px }
+dl { margin:16px 0; border-top:1px solid var(--line) }
+dl div { display:grid; grid-template-columns:minmax(8rem,1fr) minmax(0,1.7fr); gap:12px; padding:9px 0; border-bottom:1px solid var(--line) }
+dt { color:var(--muted) } dd { margin:0; overflow-wrap:anywhere; white-space:pre-wrap }
+.handoff p,#obligation,#manual { margin-top:10px }
+.error,#status { color:#ffd49a; overflow-wrap:anywhere }
+.error:not(:empty),#status:not(:empty) { margin-top:12px }
+.sr,.skip:not(:focus) { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%) }
+.skip:focus { position:absolute; padding:10px; background:var(--cream); color:var(--ink) }
+@media(max-width:780px) {
+  .layout { grid-template-columns:minmax(0,1fr) }
+  .paper,.panel { grid-area:auto }
+  .wrap { width:calc(100% - 32px) }
+}
+@media(max-width:520px) {
+  .fields,.choices,dl div { grid-template-columns:minmax(0,1fr) }
+  dl div { gap:2px }
+  .bar { min-height:62px }
+}
+@page { margin:16mm }
+@media print {
+  :root { color-scheme:light; --cream:#111; --muted:#333; --line:#aaa }
+  body,.panel,.paper { color:#111; background:white }
+  .masthead,.skip,.intro,.actions,.handoff,form,noscript { display:none!important }
+  .wrap,.layout { width:100%; display:block; margin:0 }
+  .panel,.paper { border:0; padding:0 }
+  .paper { margin-bottom:18px }
+  .paper .payment { display:none }
+  .paper h3 { margin:8px 0 2px }
+  .paper p,dl div { break-inside:avoid }
+  .print-only { display:block; margin:8px 0 }
+  dl div { display:grid; grid-template-columns:1fr 2fr; padding:4px 0 }
+}
+a { color:inherit; text-underline-offset:.18em }
+.comparison { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px }
+.comparison .panel,.comparison .paper { grid-area:auto }
+.comparison h2 { margin:10px 0 14px; font-size:2rem }
+.comparison h3,.comparison p + p { margin-top:16px }
+.comparison + .actions { margin-bottom:40px }
+@media(max-width:700px) { .comparison { grid-template-columns:minmax(0,1fr) } }
+````
+
+## assets/purchase/purchase.js
+
+````javascript
+(() => {
+  "use strict";
+  const el = id => document.getElementById(id);
+  const form = el("request");
+  const { invoiceEmail, prefill = {}, offer } = purchaseConfig;
+  const fields = { department: "Department", contact: "Contact", email: "Work email",
+    phone: "Phone", reference: "Quote or reference", po: "PO number",
+    quantity: "Desired license quantity", needs: "Device and coverage needs",
+    country: "Billing country", currency: "Requested billing currency" };
+  const smaller = () => form.elements.scope.value === "Smaller rollout";
+  const existing = () => offer && !smaller();
+  const kind = () => smaller() ? "Quote request" : existing() ? "Invoice request" : el("kind").value;
+  function node(tag, text) {
+    const item = document.createElement(tag);
+    item.textContent = text;
+    return item;
+  }
+  function displayScope() {
+    el("quantity-row").hidden = !smaller();
+    el("quantity").disabled = !smaller();
+    el("kind-row").hidden = smaller() || Boolean(offer);
+    el("brief-label").textContent = existing() ? "Existing offer" : "Purchasing information";
+    el("brief-title").textContent = existing() ? offer.title : smaller() ? "Smaller rollout" : "Full department";
+    const body = el("brief-body");
+    body.replaceChildren();
+    if (existing()) {
+      const amount = node("p", offer.amount);
+      amount.className = "amount";
+      body.append(amount, node("h3", "Coverage"), node("p", offer.scope), node("p", offer.devices),
+        node("h3", "Refund provision"), node("p", offer.refund));
+    } else {
+      body.append(node("p", smaller()
+        ? "Tell us how many licenses you are considering and which devices need access. Smart EV Guides will confirm the price, license unit and exact coverage in a separate quote."
+        : "Include your quote reference if you have one. If you need a quote, describe the members and equipment you want to cover."),
+        node("h3", "What happens next"), node("p", "Review your details, then prepare an email to Smart EV Guides. A team member will check the request and reply with the next steps."));
+    }
+    el("errors").textContent = "";
+  }
+  function review(event) {
+    event.preventDefault();
+    el("errors").textContent = "";
+    for (const id of Object.keys(fields)) {
+      const field = el(id);
+      field.removeAttribute("aria-invalid");
+      field.removeAttribute("aria-describedby");
+      if (field.disabled) continue;
+      field.value = field.value.trim();
+      if (!field.validity.valid || (id === "quantity" && field.value && !Number.isSafeInteger(field.valueAsNumber))) {
+        const message = field.validity.valueMissing ? "Enter " + fields[id].toLowerCase() + "."
+          : id === "email" ? "Enter a valid work email address." : "Enter a whole license quantity greater than zero.";
+        el("errors").textContent = message;
+        field.setAttribute("aria-invalid", "true");
+        field.setAttribute("aria-describedby", "errors");
+        field.focus();
+        return;
+      }
+    }
+    const rows = [["Request", kind()], ["Rollout", form.elements.scope.value]];
+    for (const [id, label] of Object.entries(fields)) {
+      if (!el(id).disabled && el(id).value) rows.push([label, el(id).value]);
+    }
+    el("lines").replaceChildren(...rows.map(([label, value]) => {
+      const row = document.createElement("div");
+      row.append(node("dt", label), node("dd", value));
+      return row;
+    }));
+    const subject = kind() + " — " + el("department").value;
+    const lines = rows.map(([label, value]) => label + ": " + value);
+    if (existing()) lines.push("", offer.title, offer.amount, offer.scope, offer.devices, offer.refund);
+    if (smaller()) lines.push("", "Please confirm the price, license unit and coverage for this separate rollout.");
+    lines.push("", el("terms").textContent, el("obligation").textContent);
+    const body = lines.join("\r\n");
+    el("draft").href = "mailto:" + invoiceEmail + "?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
+    el("message").value = "To: " + invoiceEmail + "\nSubject: " + subject + "\n\n" + body;
+    el("manual").open = false;
+    el("status").textContent = "";
+    showStep(true);
+  }
+  function showStep(reviewing) {
+    form.hidden = reviewing;
+    el("review").hidden = !reviewing;
+    el("title").textContent = reviewing ? "Review your request" : "Request a department license";
+    el("lead").textContent = reviewing ? "Check the details before preparing an email for your purchasing records."
+      : "Request an invoice for an existing quote or describe the coverage your department needs.";
+    el("title").focus();
+  }
+  for (const id of ["department", "contact", "email"]) el(id).value = prefill[id] || "";
+  el("recipient").textContent = invoiceEmail;
+  el("print-contact").textContent = "Purchasing contact · " + invoiceEmail;
+  form.addEventListener("submit", review);
+  form.addEventListener("change", e => { if (e.target.name === "scope") displayScope(); });
+  form.addEventListener("input", e => {
+    e.target.removeAttribute("aria-invalid");
+    e.target.removeAttribute("aria-describedby");
+    el("errors").textContent = "";
+  });
+  el("edit").onclick = () => showStep(false);
+  el("print").onclick = () => window.print();
+  el("copy").onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(el("message").value);
+      el("status").textContent = "Email text copied.";
+    } catch {
+      el("manual").open = true;
+      el("message").focus();
+      el("message").select();
+      el("status").textContent = "Text selected. Use your device’s Copy command.";
+    }
+  };
+  displayScope();
+  el("app").hidden = false;
+})();
+````
+
+## purchase.html
+
+````html
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="form-action 'none'; connect-src 'none'; base-uri 'none'">
+  <title>Department license request · Smart EV Guides</title>
+  <link rel="icon" href="favicon.svg">
+  <link rel="stylesheet" href="assets/purchase/purchase.css">
+  <script defer src="assets/purchase/purchase-config.js"></script>
+  <script defer src="assets/purchase/purchase.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to request</a>
+  <header class="masthead"><div class="wrap bar">
+    <div class="brand"><img src="assets/5c214be88758.png" width="38" height="38" alt="">Smart EV Guides</div>
+    <span class="badge">Private preview</span>
+  </div></header>
+  <main id="main" class="wrap">
+    <header class="intro">
+      <p class="eyebrow">Department licensing</p>
+      <h1 id="title" tabindex="-1">Request a department license</h1>
+      <p id="lead">Request an invoice for an existing quote or describe the coverage your department needs.</p>
+    </header>
+    <noscript>Enable JavaScript to prepare and review your request locally.</noscript>
+    <div class="layout" id="app" hidden>
+      <aside class="paper" aria-labelledby="brief-title">
+        <p class="eyebrow" id="brief-label"></p>
+        <h2 id="brief-title"></h2>
+        <div id="brief-body"></div>
+        <p class="payment"><span aria-hidden="true">○</span> Live payments disabled</p>
+      </aside>
+      <div class="panel">
+        <form id="request" novalidate>
+          <fieldset><legend>License coverage</legend>
+            <div class="choices">
+              <label><input type="radio" name="scope" value="Full department" checked> Full department</label>
+              <label><input type="radio" name="scope" value="Smaller rollout"> Smaller rollout</label>
+            </div>
+          </fieldset>
+          <div class="fields section">
+            <label id="kind-row">Request type<select id="kind"><option>Invoice request</option><option>Quote request</option></select></label>
+            <label id="quantity-row" hidden>Desired license quantity <small>(optional)</small><input id="quantity" type="number" inputmode="numeric" min="1" step="1" placeholder="e.g. 20"></label>
+            <label>Quote or reference <small>(optional)</small><input id="reference" maxlength="100"></label>
+          </div>
+          <fieldset class="section"><legend>Department contact</legend>
+            <div class="fields">
+              <label>Department name<input id="department" autocomplete="organization" required maxlength="150"></label>
+              <label>Contact name<input id="contact" autocomplete="name" required maxlength="120"></label>
+              <label>Work email<input id="email" type="email" autocomplete="email" required maxlength="254"></label>
+              <label>Phone <small>(optional)</small><input id="phone" type="tel" autocomplete="tel" maxlength="50"></label>
+            </div>
+          </fieldset>
+          <label class="section">Device and coverage needs <small>(optional)</small>
+            <textarea rows="2" id="needs" maxlength="700" placeholder="Device types, approximate counts, or questions about coverage"></textarea>
+          </label>
+          <details class="section" id="billing"><summary>PO and billing preferences <small>(optional)</small></summary>
+            <div class="fields">
+              <label>PO number<input id="po" maxlength="100"></label>
+              <label>Billing country<select id="country"><option value="">Select if needed</option><option>Canada</option><option>United States</option><option>Other</option></select></label>
+              <label>Requested billing currency<select id="currency"><option value="">Select if needed</option><option>USD</option><option>CAD</option></select></label>
+            </div>
+          </details>
+          <p class="error" id="errors" role="alert"></p>
+          <button class="primary section" type="submit">Review request <span aria-hidden="true">→</span></button>
+        </form>
+        <section id="review" hidden aria-labelledby="review-heading">
+          <p class="print-only">Smart EV Guides · Private licensing preview</p>
+          <h2 id="review-heading">Request summary</h2>
+          <dl id="lines"></dl>
+          <p id="terms">Smart EV Guides will confirm the amount, scope, currency, applicable tax, payment method and activation arrangements in the agreed quote or invoice.</p>
+          <p id="obligation">This request creates no payment or contractual obligation.</p>
+          <p class="print-only" id="print-contact"></p>
+          <div class="actions"><button id="edit" type="button">Edit details</button><button id="print" type="button">Print / save PDF</button></div>
+          <div class="handoff">
+            <h3>Prepare your email</h3>
+            <p>Open a draft addressed to <strong id="recipient"></strong>. Review it in your email app and send it yourself if you wish to proceed. A team member will review it and reply.</p>
+            <div class="actions"><a class="primary" id="draft">Open email draft</a><button type="button" id="copy">Copy email text</button></div>
+            <details id="manual"><summary>Show email text for manual copying</summary><label for="message" class="sr">Email draft text</label><textarea id="message" readonly rows="8"></textarea></details>
+            <p id="status" role="status"></p>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+</body>
+</html>
+````

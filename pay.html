@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Department License — Smart EV Guides</title>
+<!-- UNLISTED: not linked from the site, kept out of search. Send this URL to departments directly.
+     Checkout = Stripe Payment Link (live); Stripe redirects back to pay.html?paid=1.
+     Rates live in Stripe (price_1UdvD3LLmx5C29mwSsMc44ob); assets/pricing.js only displays them. -->
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/5c214be88758.png">
+<meta name="theme-color" content="#060606">
+<meta name="color-scheme" content="dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;background:#060606;color:#F4F2EF;font-family:'Geist',system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+body{background:radial-gradient(55% 35% at 50% 0%,rgba(229,50,43,.14),transparent 70%),#060606;min-height:100dvh;overflow-x:hidden}
+::selection{background:#E5322B;color:#fff}
+.top{border-bottom:1px solid rgba(255,255,255,.08)}
+.top div{max-width:1180px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.brand{display:flex;align-items:center;gap:12px;text-decoration:none;color:inherit;font-weight:600;font-size:19px;letter-spacing:-.01em;white-space:nowrap}
+.brand span{width:36px;height:36px;border-radius:10px;background:#0B0B0B;display:flex;overflow:hidden}
+.brand img{width:100%;height:100%;object-fit:contain}
+.top a.q{color:#9E9992;text-decoration:none;font-size:14px;white-space:nowrap}
+.top a.q:hover{color:#F4F2EF}
+footer{border-top:1px solid rgba(255,255,255,.08);color:#6B6762;font-size:13px}
+footer div{max-width:1180px;margin:0 auto;padding:26px 24px 40px;display:flex;flex-wrap:wrap;gap:8px 20px;justify-content:space-between}
+footer a{color:#9E9992;text-decoration:none}
+@media (max-width:520px){.top a.q{display:none}}
+</style>
+<link rel="stylesheet" href="assets/pricing.css">
+<script src="/ph.js" async></script>
+</head>
+<body>
+<header class="top"><div>
+  <a class="brand" href="index.html"><span><img src="assets/5c214be88758.png" alt=""></span>Smart EV Guides</a>
+  <a class="q" href="mailto:support@smartevguides.com?subject=Department%20license%20question">Questions? support@smartevguides.com</a>
+</div></header>
+<main>
+  <!-- PRICING -->
+  <section id="pricing" style="background:#060606; border-bottom:1px solid rgba(255,255,255,0.07);">
+    <div style="max-width:1180px; margin:0 auto; padding:56px 24px 80px;">
+
+      <div class="pcard paid" id="paid" aria-live="polite">
+        <div class="tick"><svg width="28" height="28" viewBox="0 0 16 16"><path d="M3.5 8.5l3 3L12.5 5" fill="none" stroke="#4CC38A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <h3>Payment received. Thank you.</h3>
+        <p>Your receipt is on its way by email. We'll send setup instructions for your department within one business day. Questions? <a href="mailto:support@smartevguides.com?subject=Department%20license%20setup">support@smartevguides.com</a></p>
+      </div>
+
+      <div style="font-family:'Geist Mono',monospace; font-size:12px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#FF4B42;">Pricing</div>
+      <h2 style="font-family:'Geist',system-ui,sans-serif; font-weight:600; font-size:clamp(30px,4vw,46px); line-height:1.05; letter-spacing:-0.03em; margin:14px 0 0; max-width:720px;">Priced per device. Billed yearly. Buy online in minutes.</h2>
+      <p style="font-size:17px; line-height:1.55; color:#9E9992; max-width:620px; margin:16px 0 0;">For 2 or more devices. Pay by card now through Stripe, or request an invoice if your department pays by PO.</p>
+
+      <div class="pgrid">
+        <div class="pcard">
+          <h3>How many devices?</h3>
+          <p class="sub">Count each phone, tablet or MDT that needs access. A shared rig tablet counts as one device.</p>
+          <div class="qty">
+            <label for="devices">Devices</label>
+            <div class="qrow">
+              <button class="step" type="button" id="minus" aria-label="One fewer device">−</button>
+              <input id="devices" type="number" inputmode="numeric" min="2" max="1000" step="1" value="10" aria-describedby="hint">
+              <button class="step" type="button" id="plus" aria-label="One more device">+</button>
+            </div>
+            <input id="slider" type="range" min="2" max="200" value="10" aria-label="Devices slider">
+            <p class="hint" id="hint">Minimum 2 devices. Just you? <a href="index.html#get">Get the app</a> and subscribe for $29.99/yr. Over 1,000 devices? We'll quote you directly.</p>
+          </div>
+          <div id="priced">
+            <div class="total"><span class="amt" id="amt">$250</span> <span class="per">/ year</span></div>
+            <div class="avg" id="avg">$25 per device on average</div>
+            <ul class="breakdown" id="breakdown"></ul>
+            <a class="pbtn" id="checkout" href="https://buy.stripe.com/fZubJ20F079xc8V4sO93y05">Buy now — secure checkout <span aria-hidden="true">→</span></a>
+            <div class="secure"><svg viewBox="0 0 16 16"><path d="M8 1a3.5 3.5 0 0 0-3.5 3.5V6H4a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-.5V4.5A3.5 3.5 0 0 0 8 1zm2 5H6V4.5a2 2 0 1 1 4 0V6z"/></svg>Secure payment processed by Stripe</div>
+            <p class="note">On the checkout page, set the quantity to <b id="qtyEcho">10</b> devices. Stripe applies the same rates and shows the same total.</p>
+          </div>
+          <div id="quote" class="quote">
+            <div class="total"><span class="amt">Custom quote</span></div>
+            <p class="sub" style="margin-top:12px">For more than 1,000 devices we'll price your department directly, usually within one business day.</p>
+            <a class="pbtn" href="mailto:support@smartevguides.com?subject=Department%20license%20quote%20(1000%2B%20devices)">Request a quote <span aria-hidden="true">→</span></a>
+          </div>
+        </div>
+
+        <div class="pcard">
+          <h3>Yearly rates</h3>
+          <p class="sub">Each band applies only to the devices that fall in it, so adding devices never raises the price of the ones you already have.</p>
+          <table>
+            <thead><tr><th>Devices</th><th>Per device / year</th></tr></thead>
+            <tbody id="rates"></tbody>
+          </table>
+          <p class="ex">Example: 20 devices = 10 × $25 + 10 × $23 = <b style="color:#F4F2EF">$480 / year</b>.</p>
+        </div>
+      </div>
+
+      <div class="other">
+        <div class="pcard">
+          <h3>Need an invoice or PO?</h3>
+          <p class="sub">Email us your department name, device count and PO number. We'll send an invoice you can pay by card or bank transfer.</p>
+          <a class="link" href="mailto:support@smartevguides.com?subject=Department%20license%20invoice%20request&amp;body=Department%3A%20%0D%0ADevices%3A%20%0D%0APO%20number%20(if%20any)%3A%20%0D%0ABilling%20contact%3A%20">Request an invoice <span aria-hidden="true">→</span></a>
+        </div>
+        <div class="pcard">
+          <h3>Want to try it first?</h3>
+          <p class="sub">Start a free 30-day trial for your whole department. No PO, no credit card.</p>
+          <a class="link" href="mailto:support@smartevguides.com?subject=Department%20free%20trial">Start a free trial <span aria-hidden="true">→</span></a>
+        </div>
+        <div class="pcard">
+          <h3>Have a quote from us?</h3>
+          <p class="sub">If we've quoted your department a custom price, use the private payment link we emailed you.</p>
+          <a class="link" href="mailto:support@smartevguides.com?subject=Resend%20my%20department%20payment%20link">Resend my link <span aria-hidden="true">→</span></a>
+        </div>
+      </div>
+
+      <div class="faq">
+        <details><summary>Does it renew automatically?</summary><p>Yes. The license renews yearly at the same device count. To cancel or change it, email us any time before renewal.</p></details>
+        <details><summary>Can we add devices later?</summary><p>Yes. Email us the new count and we'll adjust your subscription, charging only the difference for the rest of the year.</p></details>
+        <details><summary>What counts as a device?</summary><p>Each phone, tablet or mobile data terminal (MDT) that signs in. A tablet shared by a whole rig counts once.</p></details>
+        <details><summary>I'm buying for just myself.</summary><p>Individuals subscribe inside the app for $29.99/yr. Department licensing starts at 2 devices.</p></details>
+        <details><summary>Do you charge tax?</summary><p>Prices are in US dollars. If your department is tax-exempt or needs a tax ID on the receipt, add it at checkout or email us.</p></details>
+      </div>
+    </div>
+  </section>
+</main>
+<footer><div>
+  <span>© Smart EV Guides</span>
+  <span><a href="terms.html">Terms</a> · <a href="privacy.html">Privacy</a> · <a href="mailto:support@smartevguides.com">support@smartevguides.com</a></span>
+</div></footer>
+<script src="assets/pricing.js"></script>
+</body>
+</html>
