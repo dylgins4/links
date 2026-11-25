@@ -275,11 +275,13 @@ footer .wrap{padding-top:56px;padding-bottom:40px}
   .stat:nth-child(2){border-right:0}
   .stat:nth-child(-n+2){border-bottom:1px solid var(--line)}
 }
-/* phones: render the whole orbit + phone at desktop proportions, then shrink it to fit */
+/* phones: a real portrait layout, not a shrunken desktop. The scene is a tall box at true pixel size,
+   the phone is scaled down (--ps, set in JS), and the orbits are tall ellipses wrapped around it so
+   planets stay full-size and visible above/below the phone. */
 @media (max-width:699px){
-  .stage{height:auto;margin-top:10px}
-  .scene{position:relative;inset:auto;left:50%;width:680px;height:660px;margin-left:-340px;transform:scale(var(--sc,.5));transform-origin:50% 0}
-  .pcap{position:relative;top:auto;left:auto;transform:none;margin:calc(-660px * (1 - var(--sc,.5)) + 14px) auto 0;width:auto}
+  .stage{height:auto;margin-top:0}
+  .scene{position:relative;inset:auto;height:clamp(440px,122vw,560px)}
+  .pcap{position:relative;top:auto;left:auto;transform:none;margin:4px auto 0;width:auto}
 }
 @media (hover:none){ .node{padding:14px;margin:-14px} }
 @media (max-width:640px){
@@ -732,27 +734,46 @@ footer .wrap{padding-top:56px;padding-bottom:40px}
       parts, halo: Math.random() < .35, x:0, y:0, depth:0, s:1, a:1, hot:0};
     return n;
   });
+  // Phones get a calm subset: 12 planets on 2 rings (value = mobile ring). The rest are hidden there.
+  const MOBILE_SET = {'F-150 Lightning':0, 'Powerwall':0, 'Ask anything':0, 'Model 3':0, 'Ioniq 5':0, 'Model S':0,
+                      'EV Intel':1, 'Cayenne Electric':1, 'Plate / VIN':1, 'Offline catalog':1, 'Solar Roof':1, 'Incident mode':1};
+  const mcount = [0,0];
+  nodes.forEach(n => { n.m = n.label in MOBILE_SET ? MOBILE_SET[n.label] : -1; n.off = false; });
+  nodes.forEach(n => { if (n.m >= 0) n.mi = mcount[n.m]++; });
+  nodes.forEach(n => { n.mphase = n.m >= 0 ? (n.mi / mcount[n.m]) * Math.PI*2 + n.m*1.1 + .3 : 0; });
   // preload every screen so swaps are instant
   DATA.forEach(d => d.frames.forEach(f => { const im = new Image(); im.src = `assets/${f}.jpg`; }));
 
   const stars = Array.from({length: 140}, () => ({x: Math.random(), y: Math.random(), z: Math.random()*1.2 + .2, p: Math.random()*6.28}));
 
   const scene = document.getElementById('scene');
-  let W, H, dpr, sc = 1, cx, cy, RX = [], RY = [], ROT = -0.1, pr = {l:0,r:0,t:0,b:0}, mobile = false;
+  let W, H, dpr, cx, cy, RX = [], RY = [], ROT = -0.1, pr = {l:0,r:0,t:0,b:0}, mobile = false;
   function resize(){
-    const zoomed = matchMedia('(max-width:699px)').matches;
-    if (zoomed){ sc = Math.min(1, stage.clientWidth / 680); stage.style.setProperty('--sc', sc); W = 680; H = 660; }
-    else { sc = 1; stage.style.removeProperty('--sc'); const r = stage.getBoundingClientRect(); W = r.width; H = r.height; }
+    mobile = matchMedia('(max-width:699px)').matches;
+    if (mobile){
+      W = scene.clientWidth; H = scene.clientHeight;
+      stage.style.setProperty('--ps', Math.min(.62, W/600).toFixed(3));   // phone shrinks with the screen; icons don't
+    } else {
+      stage.style.removeProperty('--ps');
+      const r = stage.getBoundingClientRect(); W = r.width; H = r.height;
+    }
     dpr = Math.min(devicePixelRatio || 1, 2);
     cv.width = W*dpr; cv.height = H*dpr; ctx.setTransform(dpr,0,0,dpr,0,0);
-    mobile = false;
     cx = W/2; cy = H/2;
-    const f = mobile ? [0.52, 0.74, 0.98] : [0.25, 0.365, 0.485];
-    const k = mobile ? 0.5 : 0.31;
-    RX = f.map(v => v*W); RY = RX.map(v => Math.min(v*k, H*0.46));
-    ROT = mobile ? -0.18 : -0.1;
+    if (mobile){
+      // two wide ellipses (OpenRouter-style): the inner one clears the phone's sides, the outer one is wider than
+      // the screen so planets drift in from and out past the edges instead of crowding the middle
+      const half = 150 * Math.min(.62, W/600);
+      RX = [half + 62, W*0.62];
+      RY = [H*0.30, H*0.41];
+      ROT = -0.2;
+    } else {
+      RX = [0.25, 0.365, 0.485].map(v => v*W); RY = RX.map(v => Math.min(v*0.31, H*0.46));
+      ROT = -0.1;
+    }
+    nodes.forEach(n => { n.off = mobile && n.m < 0; n.el.style.display = n.off ? 'none' : ''; });
     const sr = scene.getBoundingClientRect(), p = phoneEl.getBoundingClientRect();
-    pr = {l: (p.left - sr.left)/sc, r: (p.right - sr.left)/sc, t: (p.top - sr.top)/sc, b: (p.bottom - sr.top)/sc};
+    pr = {l: p.left - sr.left, r: p.right - sr.left, t: p.top - sr.top, b: p.bottom - sr.top};
   }
   const pt = (i, t) => {
     const ex = RX[i]*Math.cos(t), ey = RY[i]*Math.sin(t), c = Math.cos(ROT), s = Math.sin(ROT);
@@ -772,31 +793,36 @@ footer .wrap{padding-top:56px;padding-bottom:40px}
     ctx.clearRect(0,0,W,H);
 
     // stars
-    for (const s of stars){
+    const ns = mobile ? 45 : stars.length;
+    for (let k = 0; k < ns; k++){
+      const s = stars[k];
       const a = (.25 + .35*Math.sin(T*1.3 + s.p)) * s.z * .6;
       ctx.fillStyle = `rgba(255,255,255,${a})`;
       ctx.fillRect(s.x*W, s.y*H, s.z, s.z);
     }
     // rings
-    for (let i = 0; i < 3; i++){
+    for (let i = 0; i < RX.length; i++){
       ctx.beginPath(); ctx.ellipse(cx, cy, RX[i], RY[i], ROT, 0, Math.PI*2);
-      ctx.strokeStyle = 'rgba(255,255,255,0.075)'; ctx.lineWidth = 1; ctx.stroke();
-      // comet sweeping each ring
-      const head = T*SPEED[i]*4 + i*2.1;
-      for (let j = 0; j < 46; j++){
+      ctx.strokeStyle = mobile ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.075)'; ctx.lineWidth = 1; ctx.stroke();
+      // comet sweeping each ring (phones: only the outer ring, shorter and fainter)
+      if (mobile && i === 0) continue;
+      const head = T*SPEED[i]*4 + i*2.1, len = mobile ? 28 : 46;
+      for (let j = 0; j < len; j++){
         const a0 = head - j*0.022, a1 = a0 - 0.022;
         const [x0,y0] = pt(i,a0), [x1,y1] = pt(i,a1);
         ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1);
-        ctx.strokeStyle = `rgba(255,70,60,${(1 - j/46)*0.55})`; ctx.lineWidth = 1.4; ctx.stroke();
+        ctx.strokeStyle = `rgba(255,70,60,${(1 - j/len)*(mobile ? .4 : .55)})`; ctx.lineWidth = 1.4; ctx.stroke();
       }
     }
     // nodes + particle clusters
     for (const n of nodes){
-      const t = n.phase + OT*SPEED[n.ring];
-      const [x,y] = pt(n.ring, t);
+      if (n.off) continue;
+      const ri = mobile ? n.m : n.ring;
+      const t = (mobile ? n.mphase : n.phase) + OT*SPEED[ri]*(mobile ? 1.7 : 1);
+      const [x,y] = pt(ri, t);
       const depth = (Math.sin(t) + 1)/2;               // 1 = front
       n.x = x; n.y = y; n.depth = depth;
-      n.s = (mobile ? .8 : .78) + .32*depth; n.a = .3 + .7*depth;
+      n.s = (mobile ? .95 : .78) + (mobile ? .3 : .32)*depth; n.a = .3 + .7*depth;
       n.el.style.transform = `translate3d(${x-15}px,${y-15}px,0) scale(${n.s.toFixed(3)})`;
       // fade out as the icon slides behind the phone, so nothing visible is ever unclickable
       const ox = Math.max(pr.l - x, 0, x - pr.r), oy = Math.max(pr.t - y, 0, y - pr.b);
@@ -806,13 +832,13 @@ footer .wrap{padding-top:56px;padding-bottom:40px}
       n.el.style.pointerEvents = n.vis < .4 ? 'none' : '';
       const hot = n === cur;
       n.el.classList.toggle('hot', hot);
-      for (const p of n.parts){
+      for (const p of (mobile && !hot ? [] : n.parts)){   // phones: no particle swarms, only on the selected planet
         p.a += p.s*dt;
         const px = x + Math.cos(p.a)*p.r*n.s, py = y + Math.sin(p.a)*p.r*.75*n.s;
         ctx.fillStyle = (p.red || hot) ? `rgba(255,80,70,${.75*n.a})` : `rgba(235,232,228,${.55*n.a})`;
         ctx.beginPath(); ctx.arc(px, py, p.z*n.s, 0, 6.283); ctx.fill();
       }
-      if (n.halo || hot){
+      if ((n.halo && !mobile) || hot){
         ctx.beginPath(); ctx.arc(x, y, (hot ? 26 + 4*Math.sin(T*6) : 22)*n.s, 0, 6.283);
         ctx.strokeStyle = hot ? `rgba(255,75,66,${.7*n.a})` : `rgba(255,255,255,${.1*n.a})`;
         ctx.lineWidth = 1; ctx.stroke();
@@ -840,7 +866,9 @@ footer .wrap{padding-top:56px;padding-bottom:40px}
     }
     if (running && !RM) requestAnimationFrame(frame);
   }
-  resize(); addEventListener('resize', resize); addEventListener('load', () => setTimeout(resize, 1900));   // re-measure after the entrance animation
+  // width-only: on phones the URL bar collapsing fires height-only resizes while scrolling; rebuilding the canvas then makes the orbit flash
+  let lastIW = innerWidth;
+  resize(); addEventListener('resize', () => { if (innerWidth !== lastIW){ lastIW = innerWidth; resize(); } }); addEventListener('load', () => setTimeout(resize, 1900));   // re-measure after the entrance animation
   if (RM){ T = 2; frame(performance.now()); }
   else {
     new IntersectionObserver(([e]) => {
@@ -900,18 +928,18 @@ footer .wrap{padding-top:56px;padding-bottom:40px}
     select(n, true);
   };
   nodes.forEach(n => {
-    n.el.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse'){ overNode = true; spdTarget = 0; pick(n, 'hover'); } });
-    n.el.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse'){ overNode = false; spdTarget = 0.15; } });
+    // the orbit never stops: hovering a planet only eases it to half speed so it's easier to aim at
+    n.el.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse'){ overNode = true; spdTarget = 0.5; pick(n, 'hover'); } });
+    n.el.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse'){ overNode = false; spdTarget = 1; } });
     n.el.addEventListener('click', () => pick(n, 'click'));
     n.el.addEventListener('focus', () => pick(n, n.el.matches(':focus-visible') ? 'keyboard' : 'tap'));
   });
-  stage.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse' && !overNode) spdTarget = 0.15; });
   stage.addEventListener('pointerleave', () => { overNode = false; spdTarget = 1; });
 
   // idle autoplay: walk through visible nodes until someone interacts
   if (!RM){
     let idx = 0;
-    const visible = n => n.a > .6 && (n.x < pr.l - 24 || n.x > pr.r + 24) && n.x > 20 && n.x < W - 20;
+    const visible = n => !n.off && n.a > .6 && (mobile ? n.vis > .9 : (n.x < pr.l - 24 || n.x > pr.r + 24)) && n.x > 20 && n.x < W - 20;
     setInterval(() => {
       if (performance.now() - userAt < 9000 || overNode || !running) return;
       for (let k = 0; k < nodes.length; k++){
